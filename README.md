@@ -1,0 +1,173 @@
+# Sakina: Music Remover & 18+ Blur for YouTube
+
+A Chrome extension (Manifest V3) that, while a YouTube video plays:
+
+1. **Removes background music** with an on-device AI model, keeping voices and Quran recitation. Sound
+   effects stay too, or go as well if you turn off **Keep sound effects**.
+2. **Blurs scenes that look 18+**, with a "Show this video" button for false alarms.
+
+Everything runs on the user's computer. No audio, video frames or browsing data leave the browser.
+
+![Popup](docs/popup.png)
+
+## Try it
+
+```bash
+npm install
+npm run chrome          # downloads the model (once), builds, opens a throwaway Chrome profile with Sakina
+```
+
+Or load it by hand: `npm run build`, open `chrome://extensions`, turn on Developer mode, click
+**Load unpacked** and pick the `build/` folder. (`--load-extension` no longer works in current Chrome,
+so `npm run chrome` loads it through the DevTools protocol instead.)
+
+For the Web Store: `npm run zip` writes `Sakina-<version>.zip` (about 35 MB, most of it the models).
+
+## Music removal
+
+The popup offers two methods. **AI, ahead of time** (v2, the default) falls back to **Live** (v1)
+automatically whenever it has nothing ready for the current moment.
+
+### v2: AI separation ahead of playback
+
+```
+YouTube's audio buffer ──copy──▶ WebM/Opus demuxer ─▶ WebCodecs decoder ─▶ 48 kHz timeline
+   (page world hook, 30–100 s ahead)          (worker in a hidden extension iframe)
+timeline ─▶ 10 s chunks (+1 s context) ─▶ MRX model ─▶ + RNNoise voice protection ─▶ separated chunk
+separated chunk ─▶ AudioWorklet player, locked to the live audio by cross-correlation ─▶ speakers
+```
+
+- **Capture** (`src/capture/main-world.js`): a page-world script copies the Opus bytes YouTube appends
+  to its Media Source buffers. YouTube's own playback path is untouched.
+- **Model**: [MRX](https://huggingface.co/audiojs/mrx) (MERL "Cocktail Fork", MIT), an int8 ONNX export
+  that splits sound into *music / speech / effects*. It runs in ONNX Runtime Web (WebAssembly, one
+  thread) at about **2.4× real time** in Chrome on an Apple-silicon Mac, so it keeps up while using
+  roughly 40 % of one core. The 7 MB TIGER-DnR model scored better on paper, but it ran at 0.2× real
+  time on CPU and 1.4× on WebGPU, which was too slow.
+- **Voice protection**: MRX was trained on read English speech, so it labels melodic recitation and
+  unaccompanied singing as music (alone, it removed 80–99 % of two Quran recitations). RNNoise runs beside it.
+  While RNNoise is confident someone is speaking or reciting, each frequency keeps at least the voice's
+  share (`src/sep/fuse.js`). A pitch that stays perfectly still for over 120 ms is treated as an
+  instrument even then.
+- **Sync** (`src/content/v2.js`, `src/audio/player.js`): every ~5 s, and after a seek, pause or volume change,
+  the last 0.34 s of live audio is cross-correlated with the decoded original. In tests this matched
+  sample for sample (score 1.000). The separated track then plays with **no added delay**, at the
+  video's volume. Chunk edges are crossfaded.
+
+### v1: live processing (fallback and "Live" mode)
+
+Held-note removal in an AudioWorklet (`src/dsp/suppressor.js`): energy that stays on one sharp pitch is
+subtracted, a phase-vocoder detector catches note starts, and RNNoise protects voices. It adds
+~73 ms of delay and needs no model download.
+
+### Keep or remove sound effects
+
+The popup's **Keep sound effects** switch is on by default. Turned off, only voices are left:
+
+- **AI mode** drops MRX's sound-effects layer along with the music (`keep: { music: 0, speech: 1, sfx: 0 }`).
+  RNNoise voice protection still applies, so recitation is kept. Changing the switch makes the worker throw
+  away the chunks it has separated and make them again; Live mode plays for the few seconds that takes.
+- **Live mode** caps each frequency bin at the share RNNoise hears as voice, faded in by its voice
+  probability. Effects, ambience and the gaps between words drop to the Strength floor (−30 dB at the
+  default). Without the voice model (if it fails to load) the switch has no effect in Live mode.
+
+Unit tests with synthetic effects (noise bursts) and a recorded voice: effects go from −0.2 dB to −82 dB in
+AI mode and from −0.1 dB to −30 dB in Live mode, while the voice stays within 0 dB (AI) and −1.6 dB (Live).
+An effect that lands on top of a word is only partly removed in Live mode.
+
+### Measured results
+
+Share of sound energy removed from 20 s clips of real YouTube videos, default settings. The v2 column is
+offline; live in Chrome, piano measured 94 %, the talk 10 % and the recitation 17 % on the clips the
+end-to-end test plays.
+
+| Clip | v1 (live) | **v2 (AI)** |
+|---|---|---|
+| Instrumental piano | 66 % | **87 %** |
+| Movie trailer | 81 % | **86 %** |
+| Vlog with background music | 55 % | **72 %** |
+| Nasheed (voices only) | 56 % | 56 % |
+| Quran recitation (two reciters) | 11 %, 25 % | **12 %, 18 %** |
+| TED talk (speech) | 3 % | **1 %** |
+| Cartoon | 8 % | **4 %** |
+
+These are energy numbers, not a listening test. `samples/` (not in git) holds before/after WAV
+files of these clips: `<clip>-1-original.wav` and `<clip>-2-sakina-v2.wav`.
+
+### Honest limits
+
+- **Recitation** keeps most of its energy but not all (12–33 % removed in different passages), partly
+  reverb. The popup's **Protect voices** slider scales v2's protection from 0 to its default of 1.3
+  (`V2_DEFAULTS.protect` in `src/sep/job.js`). If reciters sound thinned, that default is the knob
+  to raise. **Strength** only affects Live mode.
+- **Singing over music**: protecting the singer keeps some of the music while they sing.
+- **When v2 hands over to live mode**: v2 needs a few seconds after a video starts, after a seek outside what
+  is buffered, or after a pause. In the meantime, and whenever playback speed isn't 1×, live mode plays
+  (with its 73 ms delay, so there's a small jump at the hand-over).
+- **Opus/WebM only**: v2 handles YouTube's normal Opus audio. Any other format falls back to live mode.
+- **Licence note for publishing**: MRX's code and weights are MIT. Its training data (Divide and Remaster)
+  includes FMA and FSD50K clips, some under non-commercial licences. Check this before selling the
+  extension.
+
+## 18+ blur
+
+`src/blur/controller.js` grabs a 224×224 center crop of the current frame about 2.5 times a second
+(7 times a second after anything borderline) and runs NSFW.js (MobileNetV2-mid, TensorFlow.js on WebGL,
+about 12 ms per frame, also while v2 runs). The 7.5 MB classifier is only downloaded when blur is on.
+Score = Porn + Hentai + w × Sexy:
+
+| Sensitivity | Threshold | "Sexy" weight |
+|---|---|---|
+| Strict | 0.30 | 1.0 |
+| Balanced | 0.50 | 0.6 |
+| Relaxed | 0.72 | 0.3 |
+
+The blur comes off after 4 safe checks in a row. Limits: it reacts about 0.1 to 0.4 s *after* a scene appears,
+it can miss scenes and blur innocent ones (NSFW.js reports about 93 % accuracy), and it does not blur
+thumbnails.
+
+## Tests
+
+```bash
+npm test     # unit tests: DSP, WebM demuxer, timeline, alignment, player, MRX + RNNoise job (~15 s)
+npm run e2e  # real Chrome + real YouTube, muted and off-screen (~8 min, ads included)
+```
+
+The e2e test plays an instrumental video, a talk and a recitation. For each one it checks that:
+
+- the AI engine loads and locks onto the live audio;
+- most of the output comes from the AI track;
+- music is removed while speech and recitation are kept.
+
+It also checks seeking back, Live↔AI, the sound-effects switch (recitation must stay), off/on, and the
+blur path, using an injected fake score so no adult content is involved. YouTube now stops automated
+browsers after about 40 s of playback ("Something went wrong"), with or without Sakina, so each section
+starts on a fresh video. Set `SAKINA_YT_APPENDS=<capture.json>` to also run the demuxer test on a
+local capture of real YouTube bytes.
+
+## Layout
+
+```
+src/capture/   main-world.js (copies YouTube's audio bytes, page world)
+src/engine/    frame.js (hidden iframe), worker.js (decode, separate, align)
+src/sep/       webm.js, timeline.js, mrx.js, fuse.js, resample.js, align.js, job.js
+src/dsp/       suppressor.js (v1), fft.js, rnnoise-voice.js
+src/audio/     engine.js (Web Audio routing), processor.js (AudioWorklet), player.js (v2 chunk player)
+src/content/   main.js, v2.js     src/blur/  controller.js, classifier.js     src/popup/  popup.js
+static/        manifest, popup, engine.html, icons
+scripts/       build.mjs, fetch-model.mjs, chrome.mjs (launcher), publish-store.mjs, make-icons.py
+store/         Chrome Web Store kit: listing text, privacy policy, images
+test/          unit tests, e2e.mjs, fixtures/ (synthesised voice, WebM made with ffmpeg)
+```
+
+## Licence
+
+Sakina's code is under the [MIT licence](LICENSE). The built extension also contains:
+
+| Part | Licence |
+|---|---|
+| [MRX](https://huggingface.co/audiojs/mrx) separation model (downloaded at build time) | MIT (see the training-data note above) |
+| [RNNoise](https://github.com/xiph/rnnoise) via [@jitsi/rnnoise-wasm](https://github.com/jitsi/rnnoise-wasm) | BSD-3-Clause / Apache-2.0 |
+| [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) | MIT |
+| [NSFW.js](https://github.com/infinitered/nsfwjs) | MIT |
+| [TensorFlow.js](https://github.com/tensorflow/tfjs) | Apache-2.0 |

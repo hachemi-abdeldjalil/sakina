@@ -1,0 +1,72 @@
+// Builds the unpacked extension into build/ (load that folder in chrome://extensions).
+// `node scripts/build.mjs --zip` also writes Sakina-<version>.zip for the Web Store.
+import * as esbuild from 'esbuild';
+import { cpSync, rmSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const out = join(root, 'build');
+rmSync(out, { recursive: true, force: true });
+mkdirSync(join(out, 'dist'), { recursive: true });
+
+// nsfwjs dynamically imports all three of its models; keep only MobileNetV2Mid.
+const onlyMidModel = {
+  name: 'only-mid-model',
+  setup(b) {
+    b.onResolve({ filter: /model_imports\/(inception_v3|mobilenet_v2)\.js$/ }, (a) => ({ path: a.path, namespace: 'stub' }));
+    b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
+      contents: 'export const modelJson = () => { throw new Error("model not bundled") }; export const weightBundles = [];',
+    }));
+  },
+};
+
+const common = {
+  bundle: true,
+  minify: true,
+  target: 'chrome116',
+  logLevel: 'warning',
+  define: { 'process.env.NODE_ENV': '"production"' },
+};
+
+await Promise.all([
+  esbuild.build({ ...common, entryPoints: [join(root, 'src/content/main.js')], format: 'iife', outfile: join(out, 'dist/content.js') }),
+  esbuild.build({ ...common, entryPoints: [join(root, 'src/audio/processor.js')], format: 'iife', outfile: join(out, 'dist/worklet.js') }),
+  esbuild.build({ ...common, entryPoints: [join(root, 'src/popup/popup.js')], format: 'iife', outfile: join(out, 'dist/popup.js') }),
+  esbuild.build({ ...common, entryPoints: [join(root, 'src/capture/main-world.js')], format: 'iife', outfile: join(out, 'dist/capture.js') }),
+  esbuild.build({ ...common, entryPoints: [join(root, 'src/engine/frame.js')], format: 'iife', outfile: join(out, 'dist/engine-frame.js') }),
+  esbuild.build({ ...common, entryPoints: [join(root, 'src/engine/worker.js')], format: 'esm', outfile: join(out, 'dist/engine-worker.js') }),
+  esbuild.build({
+    ...common,
+    entryPoints: [join(root, 'src/blur/classifier.js')],
+    format: 'esm',
+    outfile: join(out, 'dist/classifier.js'),
+    plugins: [onlyMidModel],
+  }),
+]);
+
+cpSync(join(root, 'static'), out, { recursive: true });
+cpSync(join(root, 'node_modules/@jitsi/rnnoise-wasm/dist/rnnoise.wasm'), join(out, 'dist/rnnoise.wasm'));
+// ONNX Runtime Web (WebAssembly build) for the v2 separation worker
+mkdirSync(join(out, 'dist/ort'), { recursive: true });
+for (const f of ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs']) {
+  cpSync(join(root, 'node_modules/onnxruntime-web/dist', f), join(out, 'dist/ort', f));
+}
+// The MRX model (not in git): `npm run fetch-model` downloads and checks it.
+const model = join(root, 'models/mrx.int8.onnx');
+try { statSync(model); } catch { console.error('models/mrx.int8.onnx is missing: run `npm run fetch-model` first'); process.exit(1); }
+mkdirSync(join(out, 'models'), { recursive: true });
+cpSync(model, join(out, 'models/mrx.int8.onnx'));
+
+const size = (f) => (statSync(join(out, f)).size / 1024 / 1024).toFixed(2) + ' MB';
+console.log(`built ${out}`);
+for (const f of ['dist/content.js', 'dist/capture.js', 'dist/worklet.js', 'dist/rnnoise.wasm', 'dist/engine-worker.js', 'dist/ort/ort-wasm-simd-threaded.wasm', 'models/mrx.int8.onnx', 'dist/classifier.js', 'dist/popup.js']) console.log(`  ${f}  ${size(f)}`);
+
+if (process.argv.includes('--zip')) {
+  const { version } = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  const zip = join(root, `Sakina-${version}.zip`);
+  rmSync(zip, { force: true });
+  execFileSync('zip', ['-qr', zip, '.', '-x', '.DS_Store'], { cwd: out });
+  console.log(`  zip: ${zip}`);
+}

@@ -1,0 +1,12 @@
+* { margin: 0; box-sizing: border-box; }
+body { width: 1280px; height: 800px; overflow: hidden; background: #12201A; color: #E8EFEA;
+  font-family: 'Inter', system-ui, sans-serif; display: flex; align-items: center; gap: 56px; padding: 0 72px; }
+.copy { flex: 1; display: flex; flex-direction: column; gap: 22px; }
+.brand { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 20px; color: #6FD3A4; }
+.brand img { width: 36px; height: 36px; border-radius: 8px; }
+h1 { font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 54px; line-height: 1.08; font-weight: 700; color: #F4F6F1; letter-spacing: -0.5px; }
+p.sub { font-size: 21px; line-height: 1.5; color: #B7C9BF; max-width: 560px; }
+ul { list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 19px; color: #DCE7E0; }
+li { display: flex; gap: 12px; align-items: baseline; }
+li::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: #6FD3A4; transform: translateY(-2px); }
+.note { font-size: 14px; color: #8FA399; }
