@@ -71,9 +71,23 @@ The popup's **Keep sound effects** switch is on by default. Turned off, only voi
   probability. Effects, ambience and the gaps between words drop to the Strength floor (−30 dB at the
   default). Without the voice model (if it fails to load) the switch has no effect in Live mode.
 
-Unit tests with synthetic effects (noise bursts) and a recorded voice: effects go from −0.2 dB to −82 dB in
-AI mode and from −0.1 dB to −30 dB in Live mode, while the voice stays within 0 dB (AI) and −1.6 dB (Live).
-An effect that lands on top of a word is only partly removed in Live mode.
+Share of each 20 s YouTube clip's sound energy removed, with sound effects kept and removed (offline, same
+code as the extension):
+
+| Clip | AI, effects kept | AI, effects off | Live, effects kept | Live, effects off |
+|---|---|---|---|---|
+| Quran recitation 1 | 12 % | 14 % | 21 % | 23 % |
+| Quran recitation 2 | 18 % | 18 % | 26 % | 31 % |
+| Talk | 1 % | 10 % | 7 % | 31 % |
+| Cartoon | 4 % | 36 % | 11 % | 49 % |
+| Film trailer | 86 % | 95 % | 81 % | 94 % |
+| Vlog | 72 % | 72 % | 62 % | 77 % |
+| Piano | 87 % | 87 % | 77 % | 88 % |
+
+In AI mode, recitation is untouched by the switch and the cartoon's effects go. Live mode is blunter: with
+effects off it also thins voices a little (the talk loses 31 %), so AI mode is the better choice for it.
+Unit tests with synthetic effects (noise bursts) and a recorded voice: effects go from −0.2 dB to −82 dB
+in AI mode and from −0.1 dB to −30 dB in Live mode, while the voice stays within 0 dB (AI) and −1.4 dB (Live).
 
 ### Measured results
 

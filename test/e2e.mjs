@@ -51,18 +51,30 @@ const dismiss = () => yt.evaluate(`(() => {
   if (v && v.paused && !document.querySelector('.ad-interrupting')) document.getElementById('movie_player')?.playVideo?.();
 })()`);
 
+// Opens a search result and waits for its own content (not an ad) to play. A fresh profile sometimes gets
+// an ad that never ends in automation; then it tries the next result instead of measuring the ad.
 async function openVideo(query) {
-  let href;
-  for (let attempt = 0; attempt < 3 && !href; attempt++) {
+  let hrefs = [];
+  for (let attempt = 0; attempt < 3 && !hrefs.length; attempt++) {
     await yt.send('Page.navigate', { url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}` });
     await sleep(5000 + attempt * 3000);
-    href = await yt.evaluate(`[...document.querySelectorAll('a#video-title')].map(a => a.href).find(h => h.includes('/watch'))`);
+    hrefs = await yt.evaluate(`[...new Set([...document.querySelectorAll('a#video-title')].map(a => a.href).filter(h => h.includes('/watch?v=')).map(h => h.split('&')[0]))]`);
   }
-  if (!href) throw new Error(`no search results for "${query}"`);
+  if (!hrefs.length) throw new Error(`no search results for "${query}"`);
+  let r;
+  for (const href of hrefs.slice(0, 3)) {
+    r = await playWhenReady(href);
+    if (r.ready) break;
+    console.log(`  (no content after ${r.waited} s, probably an ad: trying the next result)`);
+  }
+  return r;
+}
+
+async function playWhenReady(href) {
   await yt.send('Page.navigate', { url: href });
   // Ready = no ad showing and the video's own time is advancing.
-  let ready = false, prev = -1;
-  for (let i = 0; i < 60 && !ready; i++) {
+  let ready = false, prev = -1, i = 0;
+  for (; i < 30 && !ready; i++) {
     await sleep(2000);
     await yt.evaluate(`document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-skip-ad button')?.click()`);
     await dismiss();
@@ -71,7 +83,7 @@ async function openVideo(query) {
     ready = !st.ad && prev >= 0 && st.t > prev;
     prev = st.ad ? -1 : st.t;
   }
-  return { href, ready };
+  return { href, ready, waited: i * 2 };
 }
 
 async function sample(seconds) {
