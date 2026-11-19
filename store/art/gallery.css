@@ -1,0 +1,55 @@
+/* Chrome Web Store gallery: a deep green frame around the popup's paper, like a cover around its pages. */
+@font-face { font-family: "Amiri"; src: url("fonts/amiri-arabic-400.woff2") format("woff2"); }
+:root {
+  --cover: #284d3d;
+  --cover-ink: #f5efe3;
+  --cover-soft: #bfd2c6;
+  --cover-line: rgba(245, 239, 227, .22);
+  --paper: #f2ebdd;
+  --paper-2: #e9e0cf;
+  --ink: #2a2621;
+  --ink-soft: #6b6255;
+  --rule: #dcd1bd;
+  --green: #2f5a46;
+  --ochre: #a26a2a;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  width: 1280px; height: 800px; overflow: hidden; position: relative;
+  background: var(--cover); color: var(--cover-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.brand { display: flex; align-items: baseline; gap: 12px; }
+.brand .mark { font-family: "Amiri", serif; font-size: 44px; line-height: 1; color: var(--cover-ink); }
+.brand .name { font-size: 18px; color: var(--cover-soft); }
+.head { position: absolute; left: 84px; top: 88px; width: 470px; display: flex; flex-direction: column; gap: 22px; }
+h1 { font-size: 56px; line-height: 1.04; font-weight: 700; letter-spacing: -1.4px; }
+.sub { font-size: 22px; line-height: 1.45; color: var(--cover-soft); }
+.small { font-size: 15px; line-height: 1.5; color: var(--cover-soft); }
+
+/* Shadows for things that sit on the cover */
+.lift { box-shadow: 0 2px 6px rgba(10, 24, 18, .25), 0 30px 70px rgba(10, 24, 18, .35); }
+
+/* Browser window */
+.browser { position: absolute; background: #fbf9f4; border-radius: 14px; overflow: hidden; color: var(--ink); }
+.chrome { height: 46px; background: #ece6da; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid #ddd4c4; }
+.dots { display: flex; gap: 7px; }
+.dots i { width: 12px; height: 12px; border-radius: 50%; background: #d3c9b7; display: block; }
+.address { flex: 1; height: 28px; border-radius: 14px; background: #fbf9f4; font-size: 14px; color: #7b7265;
+  display: flex; align-items: center; padding: 0 14px; }
+.ext { width: 32px; height: 32px; border-radius: 8px; background: #d9e6dd; display: grid; place-items: center; }
+.ext img { width: 20px; height: 20px; border-radius: 4px; }
+.page { padding: 22px 24px; }
+.player { position: relative; border-radius: 10px; overflow: hidden; background: #22313a; }
+.player svg { display: block; width: 100%; height: 100%; }
+.controls { position: absolute; left: 0; right: 0; bottom: 0; height: 44px; padding: 0 16px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .45)); display: flex; align-items: center; gap: 14px; }
+.progress { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .35); position: relative; }
+.progress b { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: #f5efe3; border-radius: 2px; }
+.play { width: 0; height: 0; border-left: 12px solid #f5efe3; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
+.title { margin-top: 16px; font-size: 20px; font-weight: 600; color: var(--ink); }
+.meta { margin-top: 4px; font-size: 15px; color: var(--ink-soft); }
+
+/* The popup screenshot, anchored like Chrome's extension popups */
+.popup { position: absolute; border-radius: 12px; display: block; }

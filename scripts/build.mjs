@@ -52,7 +52,6 @@ writeFileSync(join(out, 'THIRD_PARTY_NOTICES.txt'), [
   '- RNNoise (dist/rnnoise.wasm): BSD-3-Clause, Xiph.Org Foundation and contributors.',
   '  https://github.com/xiph/rnnoise (COPYING)',
   '- @jitsi/rnnoise-wasm (WebAssembly build of RNNoise): Apache License 2.0, text below.',
-  '- Amiri typeface (fonts/amiri-arabic-400.woff2, the popup\'s Arabic wordmark): SIL Open Font License 1.1,\n  Copyright The Amiri Project Authors. Full text in fonts/Amiri-OFL.txt.',
   '',
   '==== Sakina ====', lic('LICENSE'), '',
   '==== Apache License 2.0 (@jitsi/rnnoise-wasm) ====', lic('node_modules/@jitsi/rnnoise-wasm/LICENSE'), '',

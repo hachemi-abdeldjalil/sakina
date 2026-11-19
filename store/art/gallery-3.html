@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="gallery.css">
+<style>
+ .top { position: absolute; left: 84px; top: 70px; display: flex; flex-direction: column; gap: 16px; }
+ .note { position: absolute; left: 84px; width: 480px; transform: translateY(-16px); }
+ .note b { display: block; font-size: 22px; font-weight: 650; margin-bottom: 6px; }
+ .note span { font-size: 18px; line-height: 1.45; color: var(--cover-soft); }
+ .leader { position: absolute; height: 1px; background: var(--cover-line); }
+ .leader::after { content: ""; position: absolute; right: -4px; top: -4px; width: 9px; height: 9px; border-radius: 50%; background: var(--cover-ink); }
+</style></head><body>
+<div class="top">
+  <div class="brand"><span class="mark" lang="ar" dir="rtl">سكينة</span><span class="name">Sakina</span></div>
+  <h1 style="font-size:50px">One switch. The rest is your choice.</h1>
+</div>
+<div class="note" style="top:250px"><b>Remove music</b><span>On by default. Turn it off for any video.</span></div>
+<div class="leader" style="left:600px; top:250px; width:266px;"></div>
+<div class="note" style="top:364px"><b>Keep sound effects</b><span>Off by default, so only voices are left.</span></div>
+<div class="leader" style="left:600px; top:364px; width:266px;"></div>
+<div class="note" style="top:455px"><b>Best or Light</b><span>Light is for older computers.</span></div>
+<div class="leader" style="left:600px; top:455px; width:266px;"></div>
+<img class="popup lift" src="../../docs/popup-more.png" alt="" style="left:866px; top:210px; width:330px;">
+</body></html>

@@ -8,8 +8,8 @@ raise `version` in `static/manifest.json` for every later upload.
 1. Open https://chrome.google.com/webstore/devconsole with your developer account.
 2. **Add new item** → upload the zip.
 3. **Store listing** tab: paste the listing below. Upload the images from `store/images/`:
-   - screenshots `shot1-1280x800.png`, `shot3-1280x800.png`
-   - small promo tile `promo-440x280.png`
+   - screenshots `screenshot-1-1280x800.png` to `screenshot-5-1280x800.png`, in that order
+   - small promo tile `promo-440x280.png`, marquee promo tile `marquee-1400x560.png`
    - store icon `icon-128x128.png` (same as the package icon)
    - the store icon is taken from the package (`icons/icon128.png`)
 4. **Privacy** tab: paste the answers below.
@@ -20,8 +20,8 @@ raise `version` in `static/manifest.json` for every later upload.
 
 ## Store listing
 
-- **Name** (from the manifest): Sakina: Music Remover for YouTube
-- **Summary** (from the manifest, 114 chars): Removes background music from YouTube videos on your computer, keeping voices, Quran recitation and sound effects.
+- **Name** (from the manifest): Sakina سكينة
+- **Summary** (from the manifest, 121 chars): Removes background music from YouTube videos on your computer, keeping voices and Quran recitation. Sound effects optional.
 - **Category:** Entertainment
 - **Language:** English
 - **Description:**
@@ -32,7 +32,7 @@ raise `version` in `static/manifest.json` for every later upload.
   >
   > • Works on any YouTube video
   > • Protects speech and recitation from being treated as music
-  > • Keep sound effects, or remove them too so only voices are left
+  > • Only voices are left by default; turn on Keep sound effects to keep footsteps, doors and applause
   > • Best quality, or Light for slower computers
   >
   > Private by design: everything runs on your computer. No audio or browsing data is sent anywhere, and there is no account.
@@ -53,7 +53,7 @@ raise `version` in `static/manifest.json` for every later upload.
 - **Permission justifications:**
   - `storage`: saves the user's settings (on/off, quality, keep sound effects, strength, voice protection, centre focus).
   - Host permission (content scripts on `https://www.youtube.com/*` and `https://m.youtube.com/*`): Sakina has to process the sound of the YouTube video being watched. It runs only on YouTube.
-- **Remote code:** No, I am not using remote code. All JavaScript, WebAssembly modules (ONNX Runtime, RNNoise), the separation model and the font are included in the package.
+- **Remote code:** No, I am not using remote code. All JavaScript, WebAssembly modules (ONNX Runtime, RNNoise), and the separation model are included in the package.
 - **Data usage:** tick none of the data types, and confirm the three certifications.
 - **Privacy policy URL:** https://abdeljalil1.github.io/minicard/sakina/privacy.html (source: `store/privacy.html`).
 
@@ -64,8 +64,9 @@ summary by itself; the rest of the listing does not follow the zip:
 
 1. If 0.2.0 is still in review, cancel it in the dashboard (or wait for the result).
 2. Upload `Sakina-0.4.0.zip` (or run `npm run release` once the API setup below is done).
-3. Store listing: replace the description (and the Arabic one) with the text above. Delete the blur screenshot
-   and upload the new `shot1`, `shot3` and promo tile.
+3. Store listing: replace the description (and the Arabic one) with the text above. Delete the old screenshots
+   and upload `screenshot-1` to `screenshot-5`, the promo tile and the marquee tile (all in `store/images/`;
+   `node store/art/render.mjs` redraws them from `store/art/`).
 4. Privacy tab: replace the single purpose and the `storage` justification with the text above.
 5. Submit for review.
 

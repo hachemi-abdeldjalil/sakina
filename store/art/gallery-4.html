@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="gallery.css">
+<style>
+ .card { position: absolute; left: 610px; top: 216px; width: 590px; padding: 34px 36px; background: var(--paper); color: var(--ink); border-radius: 16px; }
+ .group { font-size: 16px; font-weight: 600; color: var(--ink-soft); margin: 0 0 14px; }
+ .group + .bar, .bar + .bar { margin-top: 14px; }
+ .bar { display: grid; grid-template-columns: 200px 1fr 54px; align-items: center; gap: 16px; font-size: 18px; }
+ .track { height: 18px; background: var(--paper-2); border-radius: 4px; overflow: hidden; }
+ .fill { height: 100%; background: var(--green); border-radius: 4px; }
+ .fill.voice { background: #a89a83; }
+ .val { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
+ .sep { height: 1px; background: var(--rule); margin: 26px 0 22px; }
+</style></head><body>
+<div class="head" style="top:222px">
+  <div class="brand"><span class="mark" lang="ar" dir="rtl">سكينة</span><span class="name">Sakina</span></div>
+  <h1>Measured on real YouTube videos</h1>
+  <p class="sub">How much of each clip’s sound Sakina removes, at its default settings.</p>
+  <p class="small">20-second clips. Share of sound energy removed, not a listening test.</p>
+</div>
+<div class="card lift">
+  <p class="group">Clips with music</p>
+  <div class="bar"><span>Film trailer</span><div class="track"><div class="fill" style="width:99%"></div></div><span class="val">99%</span></div>
+  <div class="bar"><span>Vlog with music</span><div class="track"><div class="fill" style="width:95%"></div></div><span class="val">95%</span></div>
+  <div class="bar"><span>Instrumental piano</span><div class="track"><div class="fill" style="width:94%"></div></div><span class="val">94%</span></div>
+  <div class="sep"></div>
+  <p class="group">Speech and recitation</p>
+  <div class="bar"><span>Quran recitation</span><div class="track"><div class="fill voice" style="width:14%"></div></div><span class="val">14%</span></div>
+  <div class="bar"><span>Another reciter</span><div class="track"><div class="fill voice" style="width:19%"></div></div><span class="val">19%</span></div>
+  <div class="bar"><span>Talk</span><div class="track"><div class="fill voice" style="width:10%"></div></div><span class="val">10%</span></div>
+</div>
+</body></html>

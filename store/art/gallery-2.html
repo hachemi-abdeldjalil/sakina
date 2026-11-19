@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="gallery.css">
+<style>
+ .card { position: absolute; left: 600px; top: 130px; width: 600px; padding: 34px 36px 30px; background: var(--paper); color: var(--ink); border-radius: 16px; }
+ .lane + .lane { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--rule); }
+ .lane-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+ .lane-name { font-size: 20px; font-weight: 600; }
+ .tag { font-size: 15px; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
+ .tag.gone { color: var(--ink-soft); background: var(--paper-2); }
+ .tag.kept { color: #fff; background: var(--green); }
+ .tag.choice { color: var(--ochre); border: 1.5px solid var(--ochre); }
+ .wave { height: 64px; }
+ .lane.removed .lane-name { color: var(--ink-soft); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+ .card .note { margin-top: 24px; font-size: 15px; line-height: 1.5; color: var(--ink-soft); }
+</style></head><body>
+<div class="head" style="top:196px">
+  <div class="brand"><span class="mark" lang="ar" dir="rtl">سكينة</span><span class="name">Sakina</span></div>
+  <h1>Music goes.<br>Voices stay.</h1>
+  <p class="sub">Sakina splits each video’s sound into music, voices and effects on your computer, then plays it back without the music.</p>
+</div>
+<div class="card lift">
+  <div class="lane removed"><div class="lane-head"><span class="lane-name">Music</span><span class="tag gone">Removed</span></div><div class="wave" data-wave="music" data-color="#cfc4b0"></div></div>
+  <div class="lane"><div class="lane-head"><span class="lane-name">Voices and recitation</span><span class="tag kept">Kept</span></div><div class="wave" data-wave="voice" data-color="#2f5a46"></div></div>
+  <div class="lane"><div class="lane-head"><span class="lane-name">Sound effects</span><span class="tag choice">Your choice</span></div><div class="wave" data-wave="effects" data-color="#b8874d"></div></div>
+  <p class="note">Removed by default. Turn on Keep sound effects to keep footsteps, doors and applause.</p>
+</div>
+<script src="waves.js"></script>
+</body></html>

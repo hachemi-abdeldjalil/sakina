@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Sakina: Music Remover for YouTube",
+  "name": "Sakina سكينة",
   "short_name": "Sakina",
   "version": "0.4.0",
-  "description": "Removes background music from YouTube videos on your computer, keeping voices, Quran recitation and sound effects.",
+  "description": "Removes background music from YouTube videos on your computer, keeping voices and Quran recitation. Sound effects optional.",
   "permissions": [
     "storage"
   ],

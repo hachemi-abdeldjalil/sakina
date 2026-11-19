@@ -1,9 +1,9 @@
-# Sakina: Music Remover for YouTube
+# Sakina سكينة: music remover for YouTube
 
 A Chrome extension (Manifest V3) that removes the background music from YouTube videos while they play,
-keeping voices and Quran recitation. Sound effects stay too, or go as well if you turn off
-**Keep sound effects**. It separates the sound with a model that runs on the user's computer: no audio or
-browsing data leaves the browser.
+keeping voices and Quran recitation. Sound effects go too unless you turn on **Keep sound effects**. It
+separates the sound with a model that runs on the user's computer: no audio or browsing data leaves the
+browser.
 
 <img src="docs/popup.png" alt="Sakina's popup: Remove music switch, status line, Keep sound effects switch" width="300">
 
@@ -76,7 +76,7 @@ subtracted, a phase-vocoder detector catches note starts, and RNNoise protects v
 
 ### Keep or remove sound effects
 
-The popup's **Keep sound effects** switch is on by default. Turned off, only voices are left:
+The popup's **Keep sound effects** switch is off by default, so only voices are left:
 
 - **AI mode** drops MRX's sound-effects layer along with the music (`keep: { music: 0, speech: 1, sfx: 0 }`).
   RNNoise voice protection still applies, so recitation is kept. Changing the switch makes the worker throw
@@ -105,9 +105,9 @@ in AI mode and from −0.1 dB to −30 dB in Live mode, while the voice stays wi
 
 ### Measured results
 
-Share of sound energy removed from 20 s clips of real YouTube videos, default settings. The v2 column is
-offline; live in Chrome, piano measured 94 %, the talk 10 % and the recitation 17 % on the clips the
-end-to-end test plays.
+Share of sound energy removed from 20 s clips of real YouTube videos, with **Keep sound effects** on (the
+next section has both settings). The v2 column is offline; live in Chrome, piano measured 99 %, the talk
+8 % and the recitation 18 % on the clips the end-to-end test plays.
 
 | Clip | v1 (live) | **v2 (AI)** |
 |---|---|---|
@@ -168,7 +168,7 @@ src/sep/       webm.js, timeline.js, mrx.js, fuse.js, resample.js, align.js, job
 src/dsp/       suppressor.js (v1), fft.js, rnnoise-voice.js
 src/audio/     engine.js (Web Audio routing), processor.js (AudioWorklet), player.js (v2 chunk player)
 src/content/   main.js, v2.js     src/popup/  popup.js
-static/        manifest, popup, engine.html, icons, fonts (Amiri, for the popup's Arabic wordmark)
+static/        manifest, popup, engine.html, icons
 scripts/       build.mjs, fetch-model.mjs, chrome.mjs (launcher), publish-store.mjs, make-icons.py
 store/         Chrome Web Store kit: listing text, privacy policy, images
 test/          unit tests, e2e.mjs, fixtures/ (synthesised voice, WebM made with ffmpeg)
@@ -183,4 +183,3 @@ Sakina's code is under the [MIT licence](LICENSE). The built extension also cont
 | [MRX](https://huggingface.co/audiojs/mrx) separation model (downloaded at build time) | MIT (see the training-data note above) |
 | [RNNoise](https://github.com/xiph/rnnoise) via [@jitsi/rnnoise-wasm](https://github.com/jitsi/rnnoise-wasm) | BSD-3-Clause / Apache-2.0 |
 | [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) | MIT |
-| [Amiri](https://github.com/aliftype/amiri) typeface (popup wordmark) | SIL Open Font License 1.1 |

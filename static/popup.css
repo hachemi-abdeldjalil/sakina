@@ -1,10 +1,4 @@
-/* Sakina popup: one sheet of paper, ink and a single green. The Arabic wordmark is the only flourish. */
-@font-face {
-  font-family: "Amiri";
-  src: url("fonts/amiri-arabic-400.woff2") format("woff2");
-  font-weight: 400;
-  font-display: block;
-}
+/* Sakina popup: one sheet of paper, ink and a single green. */
 
 :root {
   --paper: #f2ebdd;
@@ -36,15 +30,11 @@
 body {
   width: 300px;
   margin: 0;
-  padding: 18px 20px 16px;
+  padding: 20px 20px 16px;
   background: var(--paper);
   color: var(--ink);
   font: 13.5px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
-
-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
-.mark { font-family: "Amiri", serif; font-size: 36px; line-height: 1.1; color: var(--green); }
-.name { color: var(--ink-soft); font-size: 12px; }
 
 /* The main control */
 .lead { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }

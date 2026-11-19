@@ -140,7 +140,8 @@ await sleep(9000);
 s = await sample(3);
 check(s.at(-1)?.audio?.v2?.share > 0.8, `AI mode again: AI track back (${((s.at(-1)?.audio?.v2?.share ?? 0) * 100).toFixed(0)}%)`);
 
-console.log('\nSound effects off and on (recitation must stay)');
+console.log('\nSound effects kept, then removed (the default), recitation must stay');
+await setSettings({ keepSfx: true }); // set before the page loads, so nothing has to be separated twice
 await fresh('quran recitation');
 s = await sample(3);
 const remOn = mean(s, (x) => x?.audio?.removed);
@@ -157,12 +158,13 @@ await setSettings({ mode: 'live' });
 await sleep(2000);
 s = await sample(3);
 const remLive = mean(s, (x) => x?.audio?.removed);
-console.log(`  Live, effects off: removed ${(remLive * 100).toFixed(0)}%`);
-check(remLive < 0.5, 'Live mode keeps the recitation with effects off');
+console.log(`  Light, effects off: removed ${(remLive * 100).toFixed(0)}%`);
+check(remLive < 0.5, 'Light mode keeps the recitation with effects off');
 await setSettings({ mode: 'ai', keepSfx: true });
 await sleep(2000);
 s = await sample(1);
 check(s[0]?.v2?.sfx === 1, 'effects back on: worker sfx=1');
+await setSettings({ keepSfx: false });
 
 console.log('\nRemoval off and on');
 await fresh('ted talk');
