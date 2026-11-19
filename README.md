@@ -1,4 +1,4 @@
-# Sakina سكينة: music remover for YouTube
+# Sakina Music Remover
 
 A Chrome extension (Manifest V3) that removes the background music from YouTube videos while they play,
 keeping voices and Quran recitation. Sound effects go too unless you turn on **Keep sound effects**. It

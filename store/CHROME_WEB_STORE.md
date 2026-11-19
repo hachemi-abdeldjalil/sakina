@@ -20,7 +20,7 @@ raise `version` in `static/manifest.json` for every later upload.
 
 ## Store listing
 
-- **Name** (from the manifest): Sakina سكينة
+- **Name** (from the manifest): Sakina Music Remover
 - **Summary** (from the manifest, 121 chars): Removes background music from YouTube videos on your computer, keeping voices and Quran recitation. Sound effects optional.
 - **Category:** Entertainment
 - **Language:** English
@@ -43,7 +43,7 @@ raise `version` in `static/manifest.json` for every later upload.
 
   > شاهد يوتيوب من دون الموسيقى الخلفية.
   >
-  > تفصل سكينة صوت كل فيديو على جهازك إلى موسيقى وكلام ومؤثرات، ثم تشغّله من دون الموسيقى، مع الإبقاء على الكلام وتلاوة القرآن، ومتزامنًا مع الفيديو بلا تأخير. ويمكنك إبقاء المؤثرات الصوتية أو حذفها أيضًا.
+  > تفصل الإضافة صوت كل فيديو على جهازك إلى موسيقى وكلام ومؤثرات، ثم تشغّله من دون الموسيقى، مع الإبقاء على الكلام وتلاوة القرآن، ومتزامنًا مع الفيديو بلا تأخير. ويمكنك إبقاء المؤثرات الصوتية أو حذفها أيضًا.
   >
   > كل شيء يعمل على جهازك: لا يُرسل أي صوت أو بيانات تصفّح، ولا حاجة إلى حساب.
 
