@@ -14,7 +14,9 @@ export class ChunkPlayer {
 
   addChunk(start, L, R) {
     const c = { start, end: start + L.length / this.sr, L, R };
-    this.chunks = this.chunks.filter((x) => !(Math.abs(x.start - start) < 1e-6)); // replace same chunk
+    // Replace a chunk with the same start, or one the new chunk fully covers (separated again), so at
+    // most two chunks ever overlap (the crossfade below handles exactly two).
+    this.chunks = this.chunks.filter((x) => !(Math.abs(x.start - start) < 1e-6) && !(x.start >= start - 1e-6 && x.end <= c.end + 1e-6));
     this.chunks.push(c);
     this.chunks.sort((a, b) => a.start - b.start);
   }

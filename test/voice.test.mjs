@@ -78,3 +78,19 @@ test('keepSfx off: sound effects are cut too, the voice stays', () => {
   // Effects that land on top of a word stay partly (the voice model hears voice there): ~3 dB better.
   assert.ok(drop.after > keep.after + 2, 'voice-to-effects ratio improves with keepSfx off');
 });
+
+test('voice dominance: high for a voice alone, low for a voice over music', async () => {
+  const { rnnoiseOffline, voiceDominance } = await import('../src/sep/fuse.js');
+  const music = chords(voice.length / SR).map((v) => v * 1.2);
+  const mix = Float32Array.from(voice, (v, i) => v + music[i]);
+  const mean = (x) => {
+    const { voice: est } = rnnoiseOffline(x, createRnnoiseVoice(Module));
+    const d = voiceDominance(x, x, est);
+    let s = 0; for (let f = 100; f < d.length - 100; f++) s += d[f];
+    return s / (d.length - 200);
+  };
+  const alone = mean(voice), over = mean(mix);
+  console.log(`  dominance: voice alone ${alone.toFixed(2)}, voice over chords ${over.toFixed(2)}`);
+  assert.ok(alone > 0.8, 'a voice on its own keeps its protection');
+  assert.ok(over < alone - 0.3, 'protection is mostly withdrawn when instruments play under the voice');
+});

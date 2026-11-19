@@ -46,13 +46,14 @@ export function rnnoiseOffline(mono, voiceModel) {
  * @param {Float32Array} sL, sR      model output without music, same length and alignment
  * @param {Float32Array} voice       RNNoise voice estimate (mono), same alignment
  * @param {Float32Array} vad         smoothed voice probability per 480-sample frame
- * @param {object} opts              { protect: 0..1, vadLo, vadHi, floor }
+ * @param {object} opts              { protect: 0..1, vadLo, vadHi, floor, dominance: [lo, hi] | null }
  */
 export function fuseVoice(L, R, sL, sR, voice, vad, opts = {}) {
   const protect = opts.protect ?? 1;
   const vadLo = opts.vadLo ?? 0.8, vadHi = opts.vadHi ?? 0.97;
   const floor = opts.floor ?? 0;
   const len = L.length, pad = N / 2;
+  const dom = voiceDominance(L, R, voice, opts.dominance);
   const T = Math.floor(len / HOP) + 1;
   const outL = new Float64Array(len + N), outR = new Float64Array(len + N), wsum = new Float64Array(len + N);
   const xr = new Float64Array(N), xi = new Float64Array(N);
@@ -77,6 +78,7 @@ export function fuseVoice(L, R, sL, sR, voice, vad, opts = {}) {
     const centre = Math.min(vad.length - 1, Math.max(0, Math.floor((start + pad) / RNNOISE_FRAME)));
     let gate = (vad[centre] - vadLo) / (vadHi - vadLo);
     gate = (gate < 0 ? 0 : gate > 1 ? 1 : gate) * protect;
+    if (dom) gate *= dom[centre];
     for (let k = 0; k <= N / 2; k++) {
       const j = (N - k) % N;
       // stereo magnitudes from the packed spectra (|XL|²+|XR|² = (|Z[k]|²+|Z[j]|²)/2)
@@ -114,3 +116,38 @@ export function fuseVoice(L, R, sL, sR, voice, vad, opts = {}) {
   }
   return { L: yL, R: yR };
 }
+
+/**
+ * How much of the sound is the voice, per 480-sample frame, over a sliding 0.8 s window: the share of the
+ * mid signal's energy that RNNoise keeps as voice, mapped from [lo, hi] to 0..1. A voice on its own
+ * (recitation, speech) explains almost all of it (0.85-1). A singer over instruments, or music RNNoise
+ * mistakes for a voice, leaves the instruments over (mostly under 0.6). [0.5, 0.75] was tuned on real
+ * clips: music 72→95 % removed (vlog), recitation's worst seconds +2 to +11 points. Protection is scaled by this, so
+ * it keeps recitation without putting the music back. Returns null when disabled.
+ */
+export function voiceDominance(L, R, voice, range = [0.5, 0.75]) {
+  if (!range) return null;
+  const [lo, hi] = range;
+  const F = RNNOISE_FRAME, n = Math.ceil(L.length / F), W = 40;
+  const em = new Float64Array(n), ev = new Float64Array(n);
+  for (let f = 0; f < n; f++) {
+    let a = 0, b = 0;
+    for (let i = f * F, e = Math.min(L.length, i + F); i < e; i++) {
+      const m = 0.5 * (L[i] + R[i]);
+      a += m * m; b += voice[i] * voice[i];
+    }
+    em[f] = a; ev[f] = b;
+  }
+  const out = new Float32Array(n);
+  let sa = 0, sb = 0;
+  for (let f = 0; f < Math.min(n, W); f++) { sa += em[f]; sb += ev[f]; }
+  for (let f = 0; f < n; f++) {
+    if (f + W < n) { sa += em[f + W]; sb += ev[f + W]; }
+    if (f - W - 1 >= 0) { sa -= em[f - W - 1]; sb -= ev[f - W - 1]; }
+    const share = sa > 1e-9 ? Math.min(1, sb / sa) : 1;
+    const d = (share - lo) / (hi - lo);
+    out[f] = d < 0 ? 0 : d > 1 ? 1 : d;
+  }
+  return out;
+}
+

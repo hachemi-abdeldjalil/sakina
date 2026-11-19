@@ -73,6 +73,11 @@ export class MusicSuppressor {
       this.voiceMag = new Float64Array(this.bins);
       this.midMag = new Float64Array(this.bins);
       this.vadLo = opts.vadLo ?? 0.8;
+      // Voice dominance (see voiceDominance in sep/fuse.js): smoothed energy of the voice estimate vs the mid
+      // signal. Protection only applies while the voice is most of the sound, so music RNNoise mistakes for
+      // a voice (or a singer over instruments) is not put back. null disables it.
+      this.dominance = opts.dominance === undefined ? [0.5, 0.75] : opts.dominance;
+      this.domV = 0; this.domM = 0; this.domShare = 1;
       this.vadHi = opts.vadHi ?? 0.97;
       this.shareExp = opts.shareExp ?? 1;
       this.rockFrames = opts.rockFrames ?? 6;
@@ -163,7 +168,14 @@ export class MusicSuppressor {
       const { reV, imV, inV } = this;
       for (let t = 0; t < N; t++) { reV[t] = inV[t] * win[t]; imV[t] = 0; }
       this.fft.transform(reV, imV, false);
-      for (let k = 0; k < bins; k++) this.voiceMag[k] = Math.sqrt(reV[k] * reV[k] + imV[k] * imV[k]);
+      let ev = 0, em = 0;
+      for (let k = 0; k < bins; k++) {
+        this.voiceMag[k] = Math.sqrt(reV[k] * reV[k] + imV[k] * imV[k]);
+        ev += this.voiceMag[k] * this.voiceMag[k]; em += this.midMag[k] * this.midMag[k];
+      }
+      // ~0.4 s exponential window (hop 512 at 48 kHz = 10.7 ms)
+      this.domV += (ev - this.domV) / 40; this.domM += (em - this.domM) / 40;
+      this.domShare = this.domM > 1e-9 ? Math.min(1, this.domV / this.domM) : 1;
       inV.copyWithin(0, hop);
     }
 
@@ -248,6 +260,11 @@ export class MusicSuppressor {
       let gate = (this.vad - this.vadLo) / (this.vadHi - this.vadLo);
       gate = gate < 0 ? 0 : gate > 1 ? 1 : gate;
       gate *= this.voiceProtect;
+      if (this.dominance) {
+        const [lo, hi] = this.dominance;
+        const d = (this.domShare - lo) / (hi - lo);
+        gate *= d < 0 ? 0 : d > 1 ? 1 : d;
+      }
       if (gate > 0) {
         for (let k = 0; k < bins; k++) {
           let share = this.voiceMag[k] / (this.midMag[k] + 1e-9);

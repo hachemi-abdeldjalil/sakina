@@ -33,7 +33,7 @@ automatically whenever it has nothing ready for the current moment.
 ```
 YouTube's audio buffer ──copy──▶ WebM/Opus demuxer ─▶ WebCodecs decoder ─▶ 48 kHz timeline
    (page world hook, 30–100 s ahead)          (worker in a hidden extension iframe)
-timeline ─▶ 10 s chunks (+1 s context) ─▶ MRX model ─▶ + RNNoise voice protection ─▶ separated chunk
+timeline ─▶ chunks of up to 10 s (+1 s context) ─▶ MRX model ─▶ + RNNoise voice protection ─▶ separated chunk
 separated chunk ─▶ AudioWorklet player, locked to the live audio by cross-correlation ─▶ speakers
 ```
 
@@ -49,6 +49,17 @@ separated chunk ─▶ AudioWorklet player, locked to the live audio by cross-co
   While RNNoise is confident someone is speaking or reciting, each frequency keeps at least the voice's
   share (`src/sep/fuse.js`). A pitch that stays perfectly still for over 120 ms is treated as an
   instrument even then.
+- **Protection only while the voice dominates** (`voiceDominance` in `src/sep/fuse.js`, also in Live mode):
+  RNNoise also "hears a voice" in some music, and protection used to put that music back for a second or
+  two at a time (MRX alone removes 99–100 % of the music in those seconds). Now protection is scaled by how
+  much of the sound RNNoise's voice explains over 0.8 s: a voice on its own (recitation, speech) explains
+  85–100 %, music or a singer over instruments far less. Tuned on real clips: the vlog's music went from
+  72 % to 95 % removed, recitation from 12 %/18 % to 12 %/19 %.
+- **Scheduling** (`choose()` in `src/engine/worker.js`): the worker separates the first gap after the
+  playhead. When the playhead would reach it before a 10 s job could finish (start of a video, after a
+  seek, or when it fell behind), it runs a 5 s job starting where the playhead will be when that job is
+  done. The AI track starts about 1–2 s after a video starts (it was up to 8 s) and then plays without
+  gaps; Live mode covers what was skipped.
 - **Sync** (`src/content/v2.js`, `src/audio/player.js`): every ~5 s, and after a seek, pause or volume change,
   the last 0.34 s of live audio is cross-correlated with the decoded original. In tests this matched
   sample for sample (score 1.000). The separated track then plays with **no added delay**, at the
@@ -77,12 +88,12 @@ code as the extension):
 | Clip | AI, effects kept | AI, effects off | Live, effects kept | Live, effects off |
 |---|---|---|---|---|
 | Quran recitation 1 | 12 % | 14 % | 21 % | 23 % |
-| Quran recitation 2 | 18 % | 18 % | 26 % | 31 % |
+| Quran recitation 2 | 19 % | 19 % | 28 % | 32 % |
 | Talk | 1 % | 10 % | 7 % | 31 % |
 | Cartoon | 4 % | 36 % | 11 % | 49 % |
-| Film trailer | 86 % | 95 % | 81 % | 94 % |
-| Vlog | 72 % | 72 % | 62 % | 77 % |
-| Piano | 87 % | 87 % | 77 % | 88 % |
+| Film trailer | 90 % | 99 % | 84 % | 96 % |
+| Vlog | 95 % | 95 % | 73 % | 88 % |
+| Piano | 94 % | 94 % | 82 % | 93 % |
 
 In AI mode, recitation is untouched by the switch and the cartoon's effects go. Live mode is blunter: with
 effects off it also thins voices a little (the talk loses 31 %), so AI mode is the better choice for it.
@@ -97,13 +108,13 @@ end-to-end test plays.
 
 | Clip | v1 (live) | **v2 (AI)** |
 |---|---|---|
-| Instrumental piano | 66 % | **87 %** |
-| Movie trailer | 81 % | **86 %** |
-| Vlog with background music | 55 % | **72 %** |
-| Nasheed (voices only) | 56 % | 56 % |
-| Quran recitation (two reciters) | 11 %, 25 % | **12 %, 18 %** |
-| TED talk (speech) | 3 % | **1 %** |
-| Cartoon | 8 % | **4 %** |
+| Instrumental piano | 82 % | **94 %** |
+| Movie trailer | 84 % | **90 %** |
+| Vlog with background music | 73 % | **95 %** |
+| Nasheed (layered voices) | 63 % | 70 % |
+| Quran recitation (two reciters) | 21 %, 28 % | **12 %, 19 %** |
+| TED talk (speech) | 7 % | **1 %** |
+| Cartoon | 11 % | **4 %** |
 
 These are energy numbers, not a listening test. `samples/` (not in git) holds before/after WAV
 files of these clips: `<clip>-1-original.wav` and `<clip>-2-sakina-v2.wav`.
@@ -114,10 +125,13 @@ files of these clips: `<clip>-1-original.wav` and `<clip>-2-sakina-v2.wav`.
   reverb. The popup's **Protect voices** slider scales v2's protection from 0 to its default of 1.3
   (`V2_DEFAULTS.protect` in `src/sep/job.js`). If reciters sound thinned, that default is the knob
   to raise. **Strength** only affects Live mode.
-- **Singing over music**: protecting the singer keeps some of the music while they sing.
-- **When v2 hands over to live mode**: v2 needs a few seconds after a video starts, after a seek outside what
-  is buffered, or after a pause. In the meantime, and whenever playback speed isn't 1×, live mode plays
-  (with its 73 ms delay, so there's a small jump at the hand-over).
+- **Singing over music**: protection now backs off while instruments play under a voice, so most of a
+  song's backing goes, and much of the singer with it.
+- **Layered a cappella voices** (some nasheeds) look like instruments to the voice detector: the nasheed
+  clip went from 57 % to 70 % removed with the dominance gate. A single voice is not affected.
+- **When v2 hands over to live mode**: about 1–2 s after a video starts or after a seek outside what is
+  separated, and after a pause until it re-locks. In the meantime, and whenever playback speed isn't 1×,
+  live mode plays (with its 73 ms delay, so there's a small jump at the hand-over).
 - **Opus/WebM only**: v2 handles YouTube's normal Opus audio. Any other format falls back to live mode.
 - **Licence note for publishing**: MRX's code and weights are MIT. Its training data (Divide and Remaster)
   includes FMA and FSD50K clips, some under non-commercial licences. Check this before selling the

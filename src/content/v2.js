@@ -17,7 +17,7 @@ export class V2Controller {
     this.state = 'off';       // 'off' | 'loading' | 'ready' | 'error' | 'unsupported'
     this.error = '';
     this.worker = {};         // last worker status
-    this.have = new Set();    // chunk start times the player holds
+    this.have = new Map();    // chunks the player holds: start → end (s)
     this.locked = false;
     this.lastAlign = 0;
     this.aligning = false;
@@ -127,7 +127,7 @@ export class V2Controller {
       case 'status': this.worker = d; break;
       case 'cleared': this.have.clear(); this.audio.post({ type: 'clear' }); this.locked = false; break;
       case 'chunk':
-        if (this.audio.post({ type: 'chunk', start: d.start, L: d.L, R: d.R }, [d.L.buffer, d.R.buffer])) this.have.add(d.start);
+        if (this.audio.post({ type: 'chunk', start: d.start, L: d.L, R: d.R }, [d.L.buffer, d.R.buffer])) this.have.set(d.start, d.start + d.L.length / 48000);
         break;
       case 'aligned': this.pending.get(d.reqId)?.(d); this.pending.delete(d.reqId); break;
     }
@@ -137,7 +137,7 @@ export class V2Controller {
     switch (e.type) {
       case 'seeking': case 'pause': case 'waiting': case 'emptied': case 'ratechange':
         this._unlock();
-        if (e.type === 'seeking') this._send({ type: 'have', starts: [...this.have] });
+        if (e.type === 'seeking') this._send({ type: 'have', spans: [...this.have] });
         break;
       case 'seeked': case 'playing': case 'volumechange':
         this.lastAlign = 0; // re-align soon (the tick waits for fresh live audio)
@@ -157,7 +157,8 @@ export class V2Controller {
     if (!this.port || !v) return;
     const playing = !v.paused && !v.ended && v.readyState >= 3;
     this._send({ type: 'playhead', t: v.currentTime, duration: Number.isFinite(v.duration) ? v.duration : 0, playing, rate: v.playbackRate, enabled: this.enabled });
-    for (const s of [...this.have]) if (s < v.currentTime - 70) this.have.delete(s);
+    // Forget chunks a little before the player evicts them (60 s), so the worker never counts on one it lost.
+    for (const [s, e] of [...this.have]) if (e < v.currentTime - 55) this.have.delete(s);
     if (!this.enabled || this.state !== 'ready' || !this.audio.filtering) return;
     if (!playing || v.playbackRate !== 1) { this._unlock(); return; } // time-stretched audio can't be matched
     if (this.aligning || performance.now() < (this.freshAfter || 0)) return;

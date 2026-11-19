@@ -5,7 +5,7 @@ import { separateStereo, MRX_SR } from './mrx.js';
 import { resample } from './resample.js';
 import { rnnoiseOffline, fuseVoice } from './fuse.js';
 
-export const V2_DEFAULTS = { protect: 1.3, vadLo: 0.6, vadHi: 0.9, keep: { music: 0, speech: 1, sfx: 1 } };
+export const V2_DEFAULTS = { protect: 1.3, vadLo: 0.6, vadHi: 0.9, dominance: [0.5, 0.75], keep: { music: 0, speech: 1, sfx: 1 } };
 
 /**
  * @param {Float32Array} L, R    48 kHz
