@@ -1,14 +1,16 @@
-# Sakina: Music Remover & 18+ Blur for YouTube
+# Sakina: Music Remover for YouTube
 
-A Chrome extension (Manifest V3) that, while a YouTube video plays:
+A Chrome extension (Manifest V3) that removes the background music from YouTube videos while they play,
+keeping voices and Quran recitation. Sound effects stay too, or go as well if you turn off
+**Keep sound effects**. It separates the sound with a model that runs on the user's computer: no audio or
+browsing data leaves the browser.
 
-1. **Removes background music** with an on-device AI model, keeping voices and Quran recitation. Sound
-   effects stay too, or go as well if you turn off **Keep sound effects**.
-2. **Blurs scenes that look 18+**, with a "Show this video" button for false alarms.
+<img src="docs/popup.png" alt="Sakina's popup: Remove music switch, status line, Keep sound effects switch" width="300">
 
-Everything runs on the user's computer. No audio, video frames or browsing data leave the browser.
-
-![Popup](docs/popup.png)
+The popup is one switch, one line saying what is happening in plain words, and the sound-effects switch.
+**More settings** holds Quality (**Best**, the AI separation, or **Light**, the live filter), Protect
+voices and recitation, Strength (Light only) and Centre focus. Version 0.4.0 removed the 18+ blur that
+earlier versions had, so Sakina does one thing.
 
 ## Try it
 
@@ -21,12 +23,13 @@ Or load it by hand: `npm run build`, open `chrome://extensions`, turn on Develop
 **Load unpacked** and pick the `build/` folder. (`--load-extension` no longer works in current Chrome,
 so `npm run chrome` loads it through the DevTools protocol instead.)
 
-For the Web Store: `npm run zip` writes `Sakina-<version>.zip` (about 35 MB, most of it the models).
+For the Web Store: `npm run zip` writes `Sakina-<version>.zip` (about 31 MB, most of it the separation model).
 
 ## Music removal
 
-The popup offers two methods. **AI, ahead of time** (v2, the default) falls back to **Live** (v1)
-automatically whenever it has nothing ready for the current moment.
+The popup's Quality setting picks between two methods. **Best** (v2, the AI separation, the default)
+falls back to **Light** (v1, the live filter) automatically whenever it has nothing ready for the current
+moment.
 
 ### v2: AI separation ahead of playback
 
@@ -137,23 +140,6 @@ files of these clips: `<clip>-1-original.wav` and `<clip>-2-sakina-v2.wav`.
   includes FMA and FSD50K clips, some under non-commercial licences. Check this before selling the
   extension.
 
-## 18+ blur
-
-`src/blur/controller.js` grabs a 224×224 center crop of the current frame about 2.5 times a second
-(7 times a second after anything borderline) and runs NSFW.js (MobileNetV2-mid, TensorFlow.js on WebGL,
-about 12 ms per frame, also while v2 runs). The 7.5 MB classifier is only downloaded when blur is on.
-Score = Porn + Hentai + w × Sexy:
-
-| Sensitivity | Threshold | "Sexy" weight |
-|---|---|---|
-| Strict | 0.30 | 1.0 |
-| Balanced | 0.50 | 0.6 |
-| Relaxed | 0.72 | 0.3 |
-
-The blur comes off after 4 safe checks in a row. Limits: it reacts about 0.1 to 0.4 s *after* a scene appears,
-it can miss scenes and blur innocent ones (NSFW.js reports about 93 % accuracy), and it does not blur
-thumbnails.
-
 ## Tests
 
 ```bash
@@ -167,8 +153,8 @@ The e2e test plays an instrumental video, a talk and a recitation. For each one 
 - most of the output comes from the AI track;
 - music is removed while speech and recitation are kept.
 
-It also checks seeking back, Live↔AI, the sound-effects switch (recitation must stay), off/on, and the
-blur path, using an injected fake score so no adult content is involved. YouTube now stops automated
+It also checks seeking back, Light↔Best, the sound-effects switch (recitation must stay) and off/on.
+YouTube now stops automated
 browsers after about 40 s of playback ("Something went wrong"), with or without Sakina, so each section
 starts on a fresh video. Set `SAKINA_YT_APPENDS=<capture.json>` to also run the demuxer test on a
 local capture of real YouTube bytes.
@@ -181,8 +167,8 @@ src/engine/    frame.js (hidden iframe), worker.js (decode, separate, align)
 src/sep/       webm.js, timeline.js, mrx.js, fuse.js, resample.js, align.js, job.js
 src/dsp/       suppressor.js (v1), fft.js, rnnoise-voice.js
 src/audio/     engine.js (Web Audio routing), processor.js (AudioWorklet), player.js (v2 chunk player)
-src/content/   main.js, v2.js     src/blur/  controller.js, classifier.js     src/popup/  popup.js
-static/        manifest, popup, engine.html, icons
+src/content/   main.js, v2.js     src/popup/  popup.js
+static/        manifest, popup, engine.html, icons, fonts (Amiri, for the popup's Arabic wordmark)
 scripts/       build.mjs, fetch-model.mjs, chrome.mjs (launcher), publish-store.mjs, make-icons.py
 store/         Chrome Web Store kit: listing text, privacy policy, images
 test/          unit tests, e2e.mjs, fixtures/ (synthesised voice, WebM made with ffmpeg)
@@ -197,5 +183,4 @@ Sakina's code is under the [MIT licence](LICENSE). The built extension also cont
 | [MRX](https://huggingface.co/audiojs/mrx) separation model (downloaded at build time) | MIT (see the training-data note above) |
 | [RNNoise](https://github.com/xiph/rnnoise) via [@jitsi/rnnoise-wasm](https://github.com/jitsi/rnnoise-wasm) | BSD-3-Clause / Apache-2.0 |
 | [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) | MIT |
-| [NSFW.js](https://github.com/infinitered/nsfwjs) | MIT |
-| [TensorFlow.js](https://github.com/tensorflow/tfjs) | Apache-2.0 |
+| [Amiri](https://github.com/aliftype/amiri) typeface (popup wordmark) | SIL Open Font License 1.1 |

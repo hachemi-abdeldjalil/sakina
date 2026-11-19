@@ -11,17 +11,6 @@ const out = join(root, 'build');
 rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, 'dist'), { recursive: true });
 
-// nsfwjs dynamically imports all three of its models; keep only MobileNetV2Mid.
-const onlyMidModel = {
-  name: 'only-mid-model',
-  setup(b) {
-    b.onResolve({ filter: /model_imports\/(inception_v3|mobilenet_v2)\.js$/ }, (a) => ({ path: a.path, namespace: 'stub' }));
-    b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
-      contents: 'export const modelJson = () => { throw new Error("model not bundled") }; export const weightBundles = [];',
-    }));
-  },
-};
-
 const common = {
   bundle: true,
   minify: true,
@@ -37,13 +26,6 @@ await Promise.all([
   esbuild.build({ ...common, entryPoints: [join(root, 'src/capture/main-world.js')], format: 'iife', outfile: join(out, 'dist/capture.js') }),
   esbuild.build({ ...common, entryPoints: [join(root, 'src/engine/frame.js')], format: 'iife', outfile: join(out, 'dist/engine-frame.js') }),
   esbuild.build({ ...common, entryPoints: [join(root, 'src/engine/worker.js')], format: 'esm', outfile: join(out, 'dist/engine-worker.js') }),
-  esbuild.build({
-    ...common,
-    entryPoints: [join(root, 'src/blur/classifier.js')],
-    format: 'esm',
-    outfile: join(out, 'dist/classifier.js'),
-    plugins: [onlyMidModel],
-  }),
 ]);
 
 cpSync(join(root, 'static'), out, { recursive: true });
@@ -70,17 +52,15 @@ writeFileSync(join(out, 'THIRD_PARTY_NOTICES.txt'), [
   '- RNNoise (dist/rnnoise.wasm): BSD-3-Clause, Xiph.Org Foundation and contributors.',
   '  https://github.com/xiph/rnnoise (COPYING)',
   '- @jitsi/rnnoise-wasm (WebAssembly build of RNNoise): Apache License 2.0, text below.',
-  '- TensorFlow.js (dist/classifier.js): Apache License 2.0, Copyright Google LLC, text below.',
-  '- NSFW.js and its MobileNetV2 model (dist/classifier.js): MIT licence, text below.',
+  '- Amiri typeface (fonts/amiri-arabic-400.woff2, the popup\'s Arabic wordmark): SIL Open Font License 1.1,\n  Copyright The Amiri Project Authors. Full text in fonts/Amiri-OFL.txt.',
   '',
   '==== Sakina ====', lic('LICENSE'), '',
-  '==== NSFW.js ====', lic('node_modules/nsfwjs/LICENSE'), '',
-  '==== Apache License 2.0 (@jitsi/rnnoise-wasm, TensorFlow.js) ====', lic('node_modules/@jitsi/rnnoise-wasm/LICENSE'), '',
+  '==== Apache License 2.0 (@jitsi/rnnoise-wasm) ====', lic('node_modules/@jitsi/rnnoise-wasm/LICENSE'), '',
 ].join('\n'));
 
 const size = (f) => (statSync(join(out, f)).size / 1024 / 1024).toFixed(2) + ' MB';
 console.log(`built ${out}`);
-for (const f of ['dist/content.js', 'dist/capture.js', 'dist/worklet.js', 'dist/rnnoise.wasm', 'dist/engine-worker.js', 'dist/ort/ort-wasm-simd-threaded.wasm', 'models/mrx.int8.onnx', 'dist/classifier.js', 'dist/popup.js']) console.log(`  ${f}  ${size(f)}`);
+for (const f of ['dist/content.js', 'dist/capture.js', 'dist/worklet.js', 'dist/rnnoise.wasm', 'dist/engine-worker.js', 'dist/ort/ort-wasm-simd-threaded.wasm', 'models/mrx.int8.onnx', 'dist/popup.js']) console.log(`  ${f}  ${size(f)}`);
 
 if (process.argv.includes('--zip')) {
   const { version } = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));

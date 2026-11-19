@@ -1,7 +1,6 @@
-// Content script for youtube.com: finds the active video and hands it to both features.
+// Content script for youtube.com: finds the active video and hands it to the sound engines.
 import { DEFAULTS, loadSettings, onSettingsChanged } from '../shared/settings.js';
 import { AudioEngine } from '../audio/engine.js';
-import { BlurController } from '../blur/controller.js';
 import { V2Controller } from './v2.js';
 
 // Runs at document_start. The v2 controller is created first, synchronously, so it hears the page's
@@ -15,9 +14,8 @@ early.v2 = new V2Controller(early.audio, DEFAULTS);
   audio.update(settings);
   const v2 = early.v2;
   v2.update(settings);
-  const blur = new BlurController(settings);
   // Visible only inside the extension's isolated world (not to YouTube's scripts); used by tests.
-  globalThis.__sakina = { audio, blur, v2 };
+  globalThis.__sakina = { audio, v2 };
 
   function activeVideo() {
     const main = document.querySelector('#movie_player video.html5-main-video');
@@ -43,7 +41,6 @@ early.v2 = new V2Controller(early.audio, DEFAULTS);
     if (!v) return;
     audio.attach(v);
     v2.attach(v);
-    blur.attach(v);
   }
 
   // Media events don't bubble, but a capturing listener on the document sees them.
@@ -56,13 +53,12 @@ early.v2 = new V2Controller(early.audio, DEFAULTS);
   onSettingsChanged((patch) => {
     audio.update(patch);
     v2.update(patch);
-    blur.update(patch);
     scan();
   });
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type === 'sakina:status') {
-      reply({ audio: audio.status(), v2: v2.status(), mode: v2.settings.mode, blur: blur.status(), hasVideo: !!activeVideo() });
+      reply({ audio: audio.status(), v2: v2.status(), mode: v2.settings.mode, hasVideo: !!activeVideo() });
     }
   });
 })();

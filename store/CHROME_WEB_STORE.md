@@ -1,6 +1,6 @@
 # Publishing Sakina on the Chrome Web Store
 
-Upload file: `Sakina-<version>.zip` (35 MB), made by `npm run zip`. Rebuild with `npm run zip` after any change, and
+Upload file: `Sakina-<version>.zip` (about 31 MB), made by `npm run zip`. Rebuild with `npm run zip` after any change, and
 raise `version` in `static/manifest.json` for every later upload.
 
 ## Steps (about 5 minutes)
@@ -8,7 +8,7 @@ raise `version` in `static/manifest.json` for every later upload.
 1. Open https://chrome.google.com/webstore/devconsole with your developer account.
 2. **Add new item** → upload the zip.
 3. **Store listing** tab: paste the listing below. Upload the images from `store/images/`:
-   - screenshots `shot1-1280x800.png`, `shot2-1280x800.png`, `shot3-1280x800.png`
+   - screenshots `shot1-1280x800.png`, `shot3-1280x800.png`
    - small promo tile `promo-440x280.png`
    - store icon `icon-128x128.png` (same as the package icon)
    - the store icon is taken from the package (`icons/icon128.png`)
@@ -20,55 +20,58 @@ raise `version` in `static/manifest.json` for every later upload.
 
 ## Store listing
 
-- **Name** (from the manifest): Sakina: Music Remover & 18+ Blur
-- **Summary** (from the manifest, 130 chars): Removes background music from YouTube with on-device AI, keeping voices, recitation and sound effects. Blurs scenes that look 18+.
+- **Name** (from the manifest): Sakina: Music Remover for YouTube
+- **Summary** (from the manifest, 114 chars): Removes background music from YouTube videos on your computer, keeping voices, Quran recitation and sound effects.
 - **Category:** Entertainment
 - **Language:** English
 - **Description:**
 
-  > Watch YouTube without the background music, and without scenes you'd rather not see.
+  > Watch YouTube without the background music.
   >
-  > REMOVE THE MUSIC, KEEP THE VOICES
-  > Sakina runs an AI model on your computer that separates each video's sound into music, speech and sound effects, and plays it back without the music. Speech, Quran recitation and sound effects stay. The cleaned sound stays in sync with the video, with no added delay.
+  > Sakina separates each video's sound into music, speech and sound effects on your computer, and plays it back without the music. Speech and Quran recitation stay. The cleaned sound stays in sync with the video, with no added delay.
   >
-  > • Works on any YouTube video, ahead of playback
-  > • A voice model protects speech and recitation from being treated as music
-  > • "Live" mode: lighter processing for slower computers
+  > • Works on any YouTube video
+  > • Protects speech and recitation from being treated as music
   > • Keep sound effects, or remove them too so only voices are left
-  > • Adjustable strength and voice protection
+  > • Best quality, or Light for slower computers
   >
-  > BLUR SCENES THAT LOOK 18+
-  > An image model checks the video several times a second and blurs the player when a scene looks inappropriate. Choose Strict, Balanced or Relaxed. A "Show this video" button handles false alarms.
+  > Private by design: everything runs on your computer. No audio or browsing data is sent anywhere, and there is no account.
   >
-  > PRIVATE BY DESIGN
-  > Everything runs on your computer. No audio, video frames or browsing data are sent anywhere, and there is no account.
-  >
-  > HONEST LIMITS
-  > No filter is perfect: some music can slip through (especially singing over music), and the blur reacts a fraction of a second after a scene appears. The first time, Sakina sets up its AI model (included in the download). For the first seconds of a video, and right after you skip ahead, it uses Live mode while the AI catches up.
+  > Honest limits: no filter is perfect. Some music can slip through, especially singing over instruments, and voices sung in layered harmony can be thinned. For the first second or two of a video, and right after you skip ahead, the Light filter plays while Best catches up.
 
 - **Arabic listing** (optional; add Arabic under "Store listing → language"):
 
-  > شاهد يوتيوب من دون الموسيقى الخلفية، ومن دون المشاهد التي لا تريد رؤيتها.
+  > شاهد يوتيوب من دون الموسيقى الخلفية.
   >
-  > تشغّل سكينة نموذج ذكاء اصطناعي على جهازك يفصل صوت كل فيديو إلى موسيقى وكلام ومؤثرات، ثم يشغّله من دون الموسيقى، مع الإبقاء على الكلام وتلاوة القرآن والمؤثرات، ومتزامنًا مع الفيديو بلا تأخير. ونموذج صور يفحص الفيديو عدة مرات في الثانية ويموّه المشاهد التي تبدو مخصّصة للبالغين، مع زرّ «Show this video» عند الخطأ.
+  > تفصل سكينة صوت كل فيديو على جهازك إلى موسيقى وكلام ومؤثرات، ثم تشغّله من دون الموسيقى، مع الإبقاء على الكلام وتلاوة القرآن، ومتزامنًا مع الفيديو بلا تأخير. ويمكنك إبقاء المؤثرات الصوتية أو حذفها أيضًا.
   >
-  > كل شيء يعمل على جهازك: لا يُرسل أي صوت أو صورة أو بيانات تصفّح، ولا حاجة إلى حساب.
+  > كل شيء يعمل على جهازك: لا يُرسل أي صوت أو بيانات تصفّح، ولا حاجة إلى حساب.
 
 ## Privacy tab
 
-- **Single purpose:** Make YouTube videos suitable for viewers who avoid music and adult imagery. While a video plays, Sakina removes the background music from its sound and blurs scenes that look 18+, entirely on the user's device.
+- **Single purpose:** Remove the background music from YouTube videos while they play, keeping voices, Quran recitation and, if the user wants, sound effects. Everything runs on the user's device.
 - **Permission justifications:**
-  - `storage`: saves the user's settings (on/off switches, method, strength, voice protection, keep sound effects, blur sensitivity).
-  - Host permission (content scripts on `https://www.youtube.com/*` and `https://m.youtube.com/*`): Sakina has to process the sound of the YouTube video being watched and check its frames for the blur. It runs only on YouTube.
-- **Remote code:** No, I am not using remote code. All JavaScript, WebAssembly modules (ONNX Runtime, RNNoise) and AI models are included in the package.
+  - `storage`: saves the user's settings (on/off, quality, keep sound effects, strength, voice protection, centre focus).
+  - Host permission (content scripts on `https://www.youtube.com/*` and `https://m.youtube.com/*`): Sakina has to process the sound of the YouTube video being watched. It runs only on YouTube.
+- **Remote code:** No, I am not using remote code. All JavaScript, WebAssembly modules (ONNX Runtime, RNNoise), the separation model and the font are included in the package.
 - **Data usage:** tick none of the data types, and confirm the three certifications.
 - **Privacy policy URL:** https://abdeljalil1.github.io/minicard/sakina/privacy.html (source: `store/privacy.html`).
 
+## Moving the store item from 0.2.0 to 0.4.0
+
+0.2.0 was submitted with the 18+ blur and the old name. 0.4.0 removes the blur. The new zip changes the name and
+summary by itself; the rest of the listing does not follow the zip:
+
+1. If 0.2.0 is still in review, cancel it in the dashboard (or wait for the result).
+2. Upload `Sakina-0.4.0.zip` (or run `npm run release` once the API setup below is done).
+3. Store listing: replace the description (and the Arabic one) with the text above. Delete the blur screenshot
+   and upload the new `shot1`, `shot3` and promo tile.
+4. Privacy tab: replace the single purpose and the `storage` justification with the text above.
+5. Submit for review.
+
 ## Before you submit: three things to decide
 
-1. **Single-purpose policy.** The store asks for one narrow purpose. Sakina's two features are framed above as one
-   ("make YouTube suitable for viewers who avoid music and adult imagery"). If a reviewer disagrees, the usual fix
-   is to ship the blur as a separate extension.
+1. **Single-purpose policy.** Since 0.4.0 Sakina has one purpose, music removal (the 18+ blur was removed).
 2. **Model training data.** The MRX model's code and weights are MIT. Its training set (Divide and Remaster)
    includes FMA and FSD50K clips, some under non-commercial licences. A free extension is the lower-risk choice.
    Get advice before charging for it.

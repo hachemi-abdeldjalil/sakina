@@ -1,6 +1,6 @@
 // End-to-end check on real YouTube: npm run e2e   (Chrome runs muted and off-screen; ~8 min with ads)
 // For each video: v2 (AI separation ahead of playback) must load, lock onto the live audio, supply most
-// of the output, remove music and keep speech/recitation. Then live mode, toggles and the blur path.
+// of the output, remove music and keep speech/recitation. Then live mode, the sound-effects switch and off/on.
 import { launch } from '../scripts/chrome.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -26,18 +26,11 @@ const setSettings = (p) => control.evaluate(`chrome.storage.sync.set(${JSON.stri
 const yt = await b.open('about:blank');
 await yt.send('Runtime.enable');
 const errors = [];
-let iso = null;
 b.onEvent((m) => {
-  if (m.method === 'Runtime.executionContextCreated' && m.params.context.auxData?.type === 'isolated' && /Sakina/.test(m.params.context.name)) iso = m.params.context.id;
   const text = m.method === 'Runtime.exceptionThrown' ? JSON.stringify(m.params.exceptionDetails)
     : m.method === 'Runtime.consoleAPICalled' && /error|warning/.test(m.params.type) ? JSON.stringify(m.params) : '';
   if (text.includes(b.extensionId) || text.includes('[Sakina')) errors.push(text.slice(0, 400));
 });
-const evalIso = async (expr) => {
-  const r = await yt.send('Runtime.evaluate', { expression: expr, contextId: iso, awaitPromise: true, returnByValue: true });
-  if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 300));
-  return r.result.value;
-};
 
 let failed = 0;
 const check = (ok, msg) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${msg}`); if (!ok) failed++; };
@@ -111,7 +104,6 @@ for (const c of CASES) {
   check(last?.v2?.locked && last?.v2?.score > 0.95, 'locked onto the live audio');
   check(v2share > 0.8, 'most of the output comes from the AI track');
   check(removed >= c.removed[0] && removed <= c.removed[1], `sound removed in expected range ${c.removed.map((x) => Math.round(x * 100)).join('–')}%`);
-  check(!last?.blur?.blurred && last?.blur?.state === 'watching', 'scene checker watching, nothing blurred');
   if (c.seekBack) {
     // Seek back 8 s (already buffered): v2 must drop its lock, fall back to live, then re-lock.
     await yt.evaluate(`(() => { const p = document.getElementById('movie_player'); p.seekTo(Math.max(0, p.getCurrentTime() - 8), true); })()`);
@@ -184,32 +176,6 @@ await setSettings({ musicOn: true });
 await sleep(1500);
 s = await sample(1);
 check(s[0]?.audio?.mode === 'worklet', 'on again');
-
-console.log('\nBlur path (a fake "adult" score is injected; no adult content is used)');
-await dismiss();
-console.log('  blur before:', JSON.stringify((await status())?.blur));
-const ms = await evalIso(`(async () => { const b = __sakina.blur; const t = performance.now();
-  for (let i = 0; i < 5; i++) await b.mod.classify(b.canvas); return (performance.now() - t) / 5; })()`);
-console.log(`  classifier time per frame: ${ms.toFixed(0)} ms (with the AI audio model also running)`);
-check(ms < 150, 'classifier is fast enough to check several frames a second');
-await evalIso(`(() => { const b = __sakina.blur; b._realClassify = b.mod.classify;
-  b.mod = { ...b.mod, classify: async () => ({ Porn: 0.95, Hentai: 0, Sexy: 0.03, Neutral: 0.02, Drawing: 0 }) }; })()`);
-let blurredNow = {};
-for (let i = 0; i < 12 && !(blurredNow.cls && blurredNow.badge); i++) {
-  await sleep(500);
-  await dismiss();
-  blurredNow = await yt.evaluate(`(() => { const v = document.querySelector('video.html5-main-video');
-    const badge = document.querySelector('.sakina-badge'); return { cls: v.classList.contains('sakina-blur'), badge: !!badge && !badge.hidden }; })()`);
-}
-console.log('  blur after injecting:', JSON.stringify((await status())?.blur), JSON.stringify(blurredNow));
-check(blurredNow.cls && blurredNow.badge, 'flagged frame blurs the player and shows the badge');
-await yt.evaluate(`document.querySelector('.sakina-badge button').click()`);
-await sleep(1200);
-check(!(await yt.evaluate(`document.querySelector('video.html5-main-video').classList.contains('sakina-blur')`)), '"Show this video" lifts the blur');
-await evalIso(`(() => { const b = __sakina.blur; b.allowedVideo = ''; b.mod = { ...b.mod, classify: async () => ({ Porn: 0.01, Hentai: 0, Sexy: 0, Neutral: 0.99, Drawing: 0 }) }; })()`);
-await sleep(1500);
-check(!(await yt.evaluate(`document.querySelector('video.html5-main-video').classList.contains('sakina-blur')`)), 'safe frames keep it unblurred');
-await evalIso(`(() => { const b = __sakina.blur; b.mod = { ...b.mod, classify: b._realClassify }; })()`);
 
 if (errors.length) console.log('\nextension errors/warnings:\n ', errors.slice(0, 8).join('\n  '));
 check(errors.length === 0, 'no extension errors in the page');

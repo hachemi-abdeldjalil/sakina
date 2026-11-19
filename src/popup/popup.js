@@ -1,106 +1,74 @@
 import { loadSettings } from '../shared/settings.js';
 
 const $ = (id) => document.getElementById(id);
-const pct = (v) => `${Math.round(v * 100)}%`;
+const save = (patch) => chrome.storage.sync.set(patch);
 
 async function init() {
   const s = await loadSettings();
   $('musicOn').checked = s.musicOn;
-  $('blurOn').checked = s.blurOn;
+  $('keepSfx').checked = s.keepSfx;
   $('strength').value = s.strength;
   $('voiceFocus').value = s.voiceFocus;
   $('voiceProtect').value = s.voiceProtect;
-  $('keepSfx').checked = s.keepSfx;
-  for (const r of document.querySelectorAll('input[name="sensitivity"]')) r.checked = r.value === s.sensitivity;
   for (const r of document.querySelectorAll('input[name="mode"]')) r.checked = r.value === s.mode;
-  paintLabels();
+  try { $('more').open = localStorage.getItem('sakina:more') === '1'; } catch {}
+  paint();
 
-  const save = (patch) => chrome.storage.sync.set(patch);
-  $('musicOn').addEventListener('change', (e) => { save({ musicOn: e.target.checked }); paintLabels(); });
-  $('blurOn').addEventListener('change', (e) => { save({ blurOn: e.target.checked }); paintLabels(); });
-  $('keepSfx').addEventListener('change', (e) => { save({ keepSfx: e.target.checked }); paintLabels(); });
+  $('musicOn').addEventListener('change', (e) => { save({ musicOn: e.target.checked }); paint(); refresh(); });
+  $('keepSfx').addEventListener('change', (e) => { save({ keepSfx: e.target.checked }); paint(); refresh(); });
   for (const id of ['strength', 'voiceFocus', 'voiceProtect']) {
-    $(id).addEventListener('input', paintLabels);
     $(id).addEventListener('change', (e) => save({ [id]: Number(e.target.value) }));
   }
-  for (const r of document.querySelectorAll('input[name="sensitivity"]')) {
-    r.addEventListener('change', (e) => save({ sensitivity: e.target.value }));
-  }
   for (const r of document.querySelectorAll('input[name="mode"]')) {
-    r.addEventListener('change', (e) => save({ mode: e.target.value }));
+    r.addEventListener('change', (e) => { save({ mode: e.target.value }); paint(); });
   }
+  $('more').addEventListener('toggle', () => { try { localStorage.setItem('sakina:more', $('more').open ? '1' : '0'); } catch {} });
 
   refresh();
-  setInterval(refresh, 600);
+  setInterval(refresh, 800);
 }
 
-function paintLabels() {
-  $('strengthVal').textContent = pct($('strength').value);
-  $('voiceFocusVal').textContent = pct($('voiceFocus').value);
-  $('voiceProtectVal').textContent = pct($('voiceProtect').value);
-  $('keepSfxHint').textContent = $('keepSfx').checked ? 'Footsteps, doors, applause stay.' : 'Removed too: only voices stay.';
-  $('music-card').classList.toggle('off', !$('musicOn').checked);
-  $('blur-card').classList.toggle('off', !$('blurOn').checked);
+const mode = () => document.querySelector('input[name="mode"]:checked')?.value || 'ai';
+
+function paint() {
+  const on = $('musicOn').checked;
+  document.body.classList.toggle('off', !on);
+  $('keepSfxHint').textContent = $('keepSfx').checked
+    ? 'Footsteps, doors and applause stay.'
+    : 'Removed too, so only voices are left.';
+  const best = mode() === 'ai';
+  $('modeHint').textContent = best
+    ? 'Prepares the sound a moment ahead. Removes the most music.'
+    : 'Works instantly and uses less of your computer. Removes less music.';
+  $('strengthRow').hidden = best; // strength only tunes Light
 }
 
-function paintAi(st, musicOn) {
-  const el = $('aiStatus');
-  const v2 = st.v2, w = st.audio?.v2;
-  el.hidden = !(musicOn && st.mode === 'ai');
-  if (el.hidden || !v2) return;
-  let text, warn = false;
-  if (v2.state === 'off') text = 'AI model: starting…';
-  else if (v2.state === 'loading') text = 'AI model: loading (about 40 MB, first time only)…';
-  else if (v2.state === 'error') { text = `AI unavailable, using live mode. ${v2.error}`; warn = true; }
-  else if (w && w.share > 0.5) text = `AI active: ${Math.round(w.readyAhead)} s separated ahead · ${v2.speed.toFixed(1)}× real time.`;
-  else if (v2.locked) text = 'AI ready, waiting for the separated audio to catch up (live mode meanwhile).';
-  else text = 'AI ready: syncing with the video (live mode meanwhile).';
-  el.textContent = text;
-  el.classList.toggle('warn', warn);
-}
-
-function setStatus(id, text, warn = false) {
-  const el = $(id);
+function setStatus(text, warn = false) {
+  const el = $('status');
   el.textContent = text;
   el.classList.toggle('warn', warn);
 }
 
 async function refresh() {
+  if (!$('musicOn').checked) return setStatus('Off. Videos play with their music.');
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   let st = null;
   if (tab?.id !== undefined) {
     try { st = await chrome.tabs.sendMessage(tab.id, { type: 'sakina:status' }); } catch {}
   }
   if (!st) {
-    const onYT = /youtube\.com/.test(tab?.url || '');
-    const msg = onYT ? 'Reload this YouTube tab to start.' : 'Open a YouTube video to use Sakina.';
-    setStatus('musicStatus', msg);
-    setStatus('blurStatus', msg);
-    $('musicMeter').style.width = '0';
-    return;
+    return setStatus(/youtube\.com/.test(tab?.url || '') ? 'Reload this YouTube tab to start.' : 'Open a YouTube video to use Sakina.');
   }
-
   const a = st.audio;
-  const musicOn = $('musicOn').checked;
-  if (!musicOn) setStatus('musicStatus', 'Off: sound plays untouched.');
-  else if (!st.hasVideo) setStatus('musicStatus', 'No video on this page yet.');
-  else if (a.mode === 'waiting') setStatus('musicStatus', 'Click anywhere on the page to start.', true);
-  else if (a.mode === 'error') setStatus('musicStatus', `Could not attach: ${a.error}`, true);
-  else {
-    const voice = a.voice ? (a.vad > 0.8 ? ' Voice detected, keeping it.' : '') : ' (voice protection unavailable)';
-    const shown = a.removed ?? a.reduction;
-    setStatus('musicStatus', `Active: removing ${pct(shown)} of the sound right now.${voice}`);
-  }
-  $('musicMeter').style.width = musicOn ? pct(Math.min(1, a.removed ?? a.reduction)) : '0';
-  paintAi(st, musicOn);
-
-  const b = st.blur;
-  if (!$('blurOn').checked) setStatus('blurStatus', 'Off.');
-  else if (b.state === 'loading') setStatus('blurStatus', 'Loading the scene checker…');
-  else if (b.state === 'error') setStatus('blurStatus', `Problem: ${b.error}`, true);
-  else if (b.blurred) setStatus('blurStatus', 'Blurring the current scene.', true);
-  else if (b.state === 'watching') setStatus('blurStatus', `Watching scenes (last score ${pct(b.score)}).`);
-  else setStatus('blurStatus', 'Waiting for a video.');
+  if (!st.hasVideo) return setStatus('No video on this page yet.');
+  if (a.mode === 'waiting') return setStatus('Click anywhere on the YouTube page to start.', true);
+  if (a.mode === 'error') return setStatus(`Sakina could not start on this video (${a.error}). Reload the tab.`, true);
+  const kept = $('keepSfx').checked ? 'Voices, recitation and sound effects stay.' : 'Only voices and recitation stay.';
+  if (st.mode !== 'ai') return setStatus(`Removing music as the video plays. ${kept}`);
+  const v2 = st.v2;
+  if (v2?.state === 'error') return setStatus(`Using Light quality on this video. ${kept}`);
+  if ((a.v2?.share ?? 0) > 0.5) return setStatus(`Removing music. ${kept}`);
+  setStatus('Getting ready. Some music may come through for a moment.');
 }
 
 init();

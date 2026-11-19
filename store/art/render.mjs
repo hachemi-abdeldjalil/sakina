@@ -2,7 +2,7 @@ import { launch } from '../../scripts/chrome.mjs';
 import { writeFileSync } from 'node:fs';
 const dir = new URL('.', import.meta.url).pathname;
 const b = await launch({ extraArgs: ['--window-position=3000,3000', '--allow-file-access-from-files'] });
-for (const [name, w, h] of [['shot1', 1280, 800], ['shot2', 1280, 800], ['shot3', 1280, 800], ['promo', 440, 280]]) {
+for (const [name, w, h] of [['shot1', 1280, 800], ['shot3', 1280, 800], ['promo', 440, 280]]) {
   const p = await b.open(`file://${dir}${name}.html`);
   await p.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
   await new Promise((r) => setTimeout(r, 2500));
