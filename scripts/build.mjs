@@ -1,7 +1,7 @@
 // Builds the unpacked extension into build/ (load that folder in chrome://extensions).
 // `node scripts/build.mjs --zip` also writes Sakina-<version>.zip for the Web Store.
 import * as esbuild from 'esbuild';
-import { cpSync, rmSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { cpSync, rmSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,6 +58,25 @@ const model = join(root, 'models/mrx.int8.onnx');
 try { statSync(model); } catch { console.error('models/mrx.int8.onnx is missing: run `npm run fetch-model` first'); process.exit(1); }
 mkdirSync(join(out, 'models'), { recursive: true });
 cpSync(model, join(out, 'models/mrx.int8.onnx'));
+
+// Licences of everything the package ships: Sakina's own, plus the third-party code and models.
+const lic = (f) => readFileSync(join(root, f), 'utf8').trim();
+writeFileSync(join(out, 'THIRD_PARTY_NOTICES.txt'), [
+  'Sakina includes the following third-party software and models.',
+  '',
+  '- MRX source-separation model (models/mrx.int8.onnx): MIT licence. https://huggingface.co/audiojs/mrx',
+  '- ONNX Runtime Web (dist/ort/, dist/engine-worker.js): MIT licence, Copyright (c) Microsoft Corporation.',
+  '  https://github.com/microsoft/onnxruntime/blob/main/LICENSE',
+  '- RNNoise (dist/rnnoise.wasm): BSD-3-Clause, Xiph.Org Foundation and contributors.',
+  '  https://github.com/xiph/rnnoise (COPYING)',
+  '- @jitsi/rnnoise-wasm (WebAssembly build of RNNoise): Apache License 2.0, text below.',
+  '- TensorFlow.js (dist/classifier.js): Apache License 2.0, Copyright Google LLC, text below.',
+  '- NSFW.js and its MobileNetV2 model (dist/classifier.js): MIT licence, text below.',
+  '',
+  '==== Sakina ====', lic('LICENSE'), '',
+  '==== NSFW.js ====', lic('node_modules/nsfwjs/LICENSE'), '',
+  '==== Apache License 2.0 (@jitsi/rnnoise-wasm, TensorFlow.js) ====', lic('node_modules/@jitsi/rnnoise-wasm/LICENSE'), '',
+].join('\n'));
 
 const size = (f) => (statSync(join(out, f)).size / 1024 / 1024).toFixed(2) + ' MB';
 console.log(`built ${out}`);

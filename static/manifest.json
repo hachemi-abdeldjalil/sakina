@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sakina: Music Remover & 18+ Blur",
   "short_name": "Sakina",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Removes background music from YouTube with on-device AI, keeping voices, recitation and sound effects. Blurs scenes that look 18+.",
   "permissions": [
     "storage"
