@@ -169,7 +169,7 @@ src/dsp/       suppressor.js (v1), fft.js, rnnoise-voice.js
 src/audio/     engine.js (Web Audio routing), processor.js (AudioWorklet), player.js (v2 chunk player)
 src/content/   main.js, v2.js     src/popup/  popup.js
 static/        manifest, popup, engine.html, icons
-scripts/       build.mjs, fetch-model.mjs, chrome.mjs (launcher), publish-store.mjs, make-icons.py
+scripts/       build.mjs, fetch-model.mjs, chrome.mjs (launcher), publish-store.mjs, make-icons.mjs
 store/         Chrome Web Store kit: listing text, privacy policy, images
 test/          unit tests, e2e.mjs, fixtures/ (synthesised voice, WebM made with ffmpeg)
 ```
