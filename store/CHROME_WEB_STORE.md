@@ -55,7 +55,7 @@ raise `version` in `static/manifest.json` for every later upload.
   - Host permission (content scripts on `https://www.youtube.com/*` and `https://m.youtube.com/*`): Sakina has to process the sound of the YouTube video being watched. It runs only on YouTube.
 - **Remote code:** No, I am not using remote code. All JavaScript, WebAssembly modules (ONNX Runtime, RNNoise), and the separation model are included in the package.
 - **Data usage:** tick none of the data types, and confirm the three certifications.
-- **Privacy policy URL:** https://abdeljalil1.github.io/minicard/sakina/privacy.html (source: `store/privacy.html`).
+- **Privacy policy URL:** https://hachemi-abdeldjalil.github.io/minicard/sakina/privacy.html (source: `store/privacy.html`).
 
 ## Moving the store item from 0.2.0 to 0.4.0
 
