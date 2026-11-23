@@ -58,6 +58,13 @@ separated chunk ─▶ AudioWorklet player, locked to the live audio by cross-co
   much of the sound RNNoise's voice explains over 0.8 s: a voice on its own (recitation, speech) explains
   85–100 %, music or a singer over instruments far less. Tuned on real clips: the vlog's music went from
   72 % to 95 % removed, recitation from 12 %/18 % to 12 %/19 %.
+- **Songs stay out, evenly** (`V2_DEFAULTS.song`, AI mode only, since 0.4.3): the same measure over ±3 s.
+  On that scale a song stays under about 0.65 even where the singing is loud, while recitation stays over
+  about 0.75. Protection is scaled by it as well, so a song goes evenly silent instead of letting pieces of
+  the singing back in. CoComelon's "Wheels on the Bus" went from 85–96 % removed (some seconds only 55 %)
+  to 99–100 % in every second; five recitations (two reciters, taraweeh in a mosque, Mishary Alafasy, a
+  child) did not change by a single point. Live mode does not use it: there, voice protection is what keeps
+  speech over background music, and this check would cut that speech too.
 - **Scheduling** (`choose()` in `src/engine/worker.js`): the worker separates the first gap after the
   playhead. When the playhead would reach it before a 10 s job could finish (start of a video, after a
   seek, or when it fell behind), it runs a 5 s job starting where the playhead will be when that job is
@@ -95,8 +102,9 @@ code as the extension):
 | Talk | 1 % | 10 % | 7 % | 31 % |
 | Cartoon | 4 % | 36 % | 11 % | 49 % |
 | Film trailer | 90 % | 99 % | 84 % | 96 % |
-| Vlog | 95 % | 95 % | 73 % | 88 % |
-| Piano | 94 % | 94 % | 82 % | 93 % |
+| Vlog | 100 % | 100 % | 73 % | 88 % |
+| Piano | 100 % | 100 % | 82 % | 93 % |
+| Children's song (3 parts) | 95–99 % | 99–100 % | 54–57 % | 70–78 % |
 
 In AI mode, recitation is untouched by the switch and the cartoon's effects go. Live mode is blunter: with
 effects off it also thins voices a little (the talk loses 31 %), so AI mode is the better choice for it.
@@ -111,13 +119,14 @@ next section has both settings). The v2 column is offline; live in Chrome, piano
 
 | Clip | v1 (live) | **v2 (AI)** |
 |---|---|---|
-| Instrumental piano | 82 % | **94 %** |
+| Instrumental piano | 82 % | **100 %** |
 | Movie trailer | 84 % | **90 %** |
-| Vlog with background music | 73 % | **95 %** |
-| Nasheed (layered voices) | 63 % | 70 % |
+| Vlog with background music | 73 % | **100 %** |
+| Nasheed (layered voices) | 63 % | 81 % |
 | Quran recitation (two reciters) | 21 %, 28 % | **12 %, 19 %** |
 | TED talk (speech) | 7 % | **1 %** |
 | Cartoon | 11 % | **4 %** |
+| Children's song (3 parts) | 54–57 % | **95–99 %** |
 
 These are energy numbers, not a listening test. `samples/` (not in git) holds before/after WAV
 files of these clips: `<clip>-1-original.wav` and `<clip>-2-sakina-v2.wav`.
@@ -128,10 +137,11 @@ files of these clips: `<clip>-1-original.wav` and `<clip>-2-sakina-v2.wav`.
   reverb. The popup's **Protect voices** slider scales v2's protection from 0 to its default of 1.3
   (`V2_DEFAULTS.protect` in `src/sep/job.js`). If reciters sound thinned, that default is the knob
   to raise. **Strength** only affects Live mode.
-- **Singing over music**: protection now backs off while instruments play under a voice, so most of a
-  song's backing goes, and much of the singer with it.
+- **Singing over music** is removed with the singer in AI mode: a song counts as music. In Live mode
+  pieces of the singing still come through.
 - **Layered a cappella voices** (some nasheeds) look like instruments to the voice detector: the nasheed
-  clip went from 57 % to 70 % removed with the dominance gate. A single voice is not affected.
+  clip went from 57 % to 70 % removed with the dominance gate, and to 81 % with the song check (0.4.3).
+  A single voice is not affected.
 - **When v2 hands over to live mode**: about 1–2 s after a video starts or after a seek outside what is
   separated, and after a pause until it re-locks. In the meantime, and whenever playback speed isn't 1×,
   live mode plays (with its 73 ms delay, so there's a small jump at the hand-over).

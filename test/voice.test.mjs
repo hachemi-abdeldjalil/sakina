@@ -94,3 +94,25 @@ test('voice dominance: high for a voice alone, low for a voice over music', asyn
   assert.ok(alone > 0.8, 'a voice on its own keeps its protection');
   assert.ok(over < alone - 0.3, 'protection is mostly withdrawn when instruments play under the voice');
 });
+
+test('AI mode song check: a voice over chords stays out, a voice alone comes back', async () => {
+  // MRX hears singing (and melodic recitation) as music, so its output here is silence; only voice
+  // protection can bring a voice back. It should for a voice alone, and not even in part for a song.
+  const { rnnoiseOffline, fuseVoice } = await import('../src/sep/fuse.js');
+  const { V2_DEFAULTS } = await import('../src/sep/job.js');
+  const music = chords(voice.length / SR).map((v) => v * 1.2);
+  const mix = Float32Array.from(voice, (v, i) => v + music[i]);
+  const none = new Float32Array(voice.length);
+  const kept = (x, song) => {
+    const { voice: est, vad } = rnnoiseOffline(x, createRnnoiseVoice(Module));
+    const y = fuseVoice(x, x, none, none, est, vad, { ...V2_DEFAULTS, song });
+    return db(energy(y.L) / energy(x));
+  };
+  const alone = kept(voice, V2_DEFAULTS.song), before = kept(mix, null), now = kept(mix, V2_DEFAULTS.song);
+  console.log(`  voice alone kept at ${alone.toFixed(1)} dB; voice over chords ${before.toFixed(1)} dB without the song check, ${now.toFixed(1)} dB with it`);
+  assert.ok(alone > -3, `a voice alone dropped to ${alone.toFixed(1)} dB`);
+  // Synthetic chords look more like a voice to RNNoise than real instruments do (voice share over ±3 s
+  // 0.46-0.71 here, 0.21-0.65 on a real children's song), so a little still comes back here.
+  assert.ok(now < before - 8, 'the song check takes the song much further down');
+  assert.ok(now < -15, `a song is only reduced to ${now.toFixed(1)} dB`);
+});
