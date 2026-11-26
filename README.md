@@ -16,14 +16,15 @@ earlier versions had, so Sakina does one thing.
 
 ```bash
 npm install
-npm run chrome          # downloads the model (once), builds, opens a throwaway Chrome profile with Sakina
+npm run fetch-model     # downloads the models once (the vocals model's float16 copy needs Python 3 with `pip install onnx numpy`)
+npm run chrome          # builds, opens a throwaway Chrome profile with Sakina
 ```
 
 Or load it by hand: `npm run build`, open `chrome://extensions`, turn on Developer mode, click
 **Load unpacked** and pick the `build/` folder. (`--load-extension` no longer works in current Chrome,
 so `npm run chrome` loads it through the DevTools protocol instead.)
 
-For the Web Store: `npm run zip` writes `Sakina-<version>.zip` (about 31 MB, most of it the separation model).
+For the Web Store: `npm run zip` writes `Sakina-<version>.zip` (about 42 MB, most of it the two models).
 
 ## Music removal
 
@@ -35,7 +36,7 @@ moment.
 
 ```
 YouTube's audio buffer ──copy──▶ WebM/Opus demuxer ─▶ WebCodecs decoder ─▶ 48 kHz timeline
-   (page world hook, 30–100 s ahead)          (worker in a hidden extension iframe)
+   (page world hook, 30–100 s ahead)          (worker in the extension's offscreen document)
 timeline ─▶ chunks of up to 10 s (+1 s context) ─▶ MRX model ─▶ + RNNoise voice protection ─▶ separated chunk
 separated chunk ─▶ AudioWorklet player, locked to the live audio by cross-correlation ─▶ speakers
 ```
@@ -43,15 +44,42 @@ separated chunk ─▶ AudioWorklet player, locked to the live audio by cross-co
 - **Capture** (`src/capture/main-world.js`): a page-world script copies the Opus bytes YouTube appends
   to its Media Source buffers. YouTube's own playback path is untouched.
 - **Model**: [MRX](https://huggingface.co/audiojs/mrx) (MERL "Cocktail Fork", MIT), an int8 ONNX export
-  that splits sound into *music / speech / effects*. It runs in ONNX Runtime Web (WebAssembly, one
-  thread) at about **2.4× real time** in Chrome on an Apple-silicon Mac, so it keeps up while using
-  roughly 40 % of one core. The 7 MB TIGER-DnR model scored better on paper, but it ran at 0.2× real
+  that splits sound into *music / speech / effects*. It runs in ONNX Runtime Web (WebAssembly). Since 0.5
+  the engine worker lives in an **offscreen document** (opened by the background service worker), which
+  Chrome treats as cross-origin isolated thanks to the manifest's `cross_origin_embedder_policy` and
+  `cross_origin_opener_policy` keys, so the model gets up to 4 threads (cores − 1). A whole separation job
+  (MRX + voice protection) then runs at **4.2–4.65× real time** on an Apple-silicon Mac, against 2.3–2.6× with
+  one thread. The tab reaches the engine over a `chrome.runtime` port (JSON only, so binary data travels
+  as base64, `src/shared/wire.js`). If the offscreen engine can't start, the tab falls back to the old
+  hidden extension iframe on the page, which Chrome never isolates: one thread, as before 0.5. The 7 MB TIGER-DnR model scored better on paper, but it ran at 0.2× real
   time on CPU and 1.4× on WebGPU, which was too slow.
 - **Voice protection**: MRX was trained on read English speech, so it labels melodic recitation and
-  unaccompanied singing as music (alone, it removed 80–99 % of two Quran recitations). RNNoise runs beside it.
-  While RNNoise is confident someone is speaking or reciting, each frequency keeps at least the voice's
-  share (`src/sep/fuse.js`). A pitch that stays perfectly still for over 120 ms is treated as an
-  instrument even then.
+  unaccompanied singing as music (alone, it removed 80–99 % of two Quran recitations). A second model says
+  where the voice is, and each frequency keeps at least the voice's share (`src/sep/fuse.js`).
+- **Voice guard** (since 0.5, `src/sep/mdx.js`): that second model is **UVR-MDX-NET 1_9703**, a music
+  "vocals" model by the Ultimate Vocal Remover team (30 MB, shipped with float16 weights: 14 MB). It puts
+  every human voice, spoken, sung or recited, in its vocals stem, so it is a far better voice estimate than
+  RNNoise, which calls clean held tones a voice and melodic recitation noise. With it, the two gates that
+  only patched RNNoise's mistakes are off (`GUARD_OPTS` in `src/sep/job.js`: no voice-activity gate, no
+  "steady pitch = instrument" rule), and its windows don't overlap (no result changed; 26 % faster). Jobs
+  are sized to fill two model runs (9.6 s of output). Measured on 19 real 20 s clips, offline with the
+  extension's code (effects off, the default):
+
+  | Clip | RNNoise guard (0.4.3) | **Voice guard (0.5)** |
+  |---|---|---|
+  | 8 recitation clips (Husary, a mosque taraweeh, Mishary Alafasy, a child, …) | 14–35 % removed | **0–4 %** |
+  | Talk | 10 % | 9 % |
+  | Children's songs (CoComelon ×3, Baby Shark) | 99–100 % | 99–100 % |
+  | Arabic children's song | 78 % | 73 % |
+  | Piano, vlog, film trailer | 99–100 % | 99–100 % |
+  | Held synthetic chords (unit-test signal) | 79 % | **100 %** |
+  | A cappella nasheed | 81 % | 100 % |
+  | Cartoon | 36 % | 5 % |
+
+  In Chrome a recitation played with 1–2 % removed and the children's song stayed silent. The guard needs
+  the offscreen engine's threads: it loads only with 3 or more, and a tab drops it (back to RNNoise) when,
+  after start-up, a full job would make less than 1.15 s of output per second of work. In Chrome on an
+  M3 Max (under heavy load from other apps) guarded jobs ran at 1.5–2× real time.
 - **Protection only while the voice dominates** (`voiceDominance` in `src/sep/fuse.js`, also in Live mode):
   RNNoise also "hears a voice" in some music, and protection used to put that music back for a second or
   two at a time (MRX alone removes 99–100 % of the music in those seconds). Now protection is scaled by how
@@ -133,15 +161,24 @@ files of these clips: `<clip>-1-original.wav` and `<clip>-2-sakina-v2.wav`.
 
 ### Honest limits
 
-- **Recitation** keeps most of its energy but not all (12–33 % removed in different passages), partly
-  reverb. The popup's **Protect voices** slider scales v2's protection from 0 to its default of 1.3
+- **Recitation** with the voice guard keeps nearly all of its energy (0–4 % removed on 8 clips). Without it
+  (slow computers, the iframe fallback) it keeps most but not all (12–35 % removed), partly reverb. The popup's **Protect voices** slider scales v2's protection from 0 to its default of 1.3
   (`V2_DEFAULTS.protect` in `src/sep/job.js`). If reciters sound thinned, that default is the knob
   to raise. **Strength** only affects Live mode.
 - **Singing over music** is removed with the singer in AI mode: a song counts as music. In Live mode
   pieces of the singing still come through.
 - **Layered a cappella voices** (some nasheeds) look like instruments to the voice detector: the nasheed
   clip went from 57 % to 70 % removed with the dominance gate, and to 81 % with the song check (0.4.3).
-  A single voice is not affected.
+  A single voice is not affected. With the voice guard the a cappella nasheed is removed in full (100 %):
+  the song check treats layered voices like a song.
+- **Recitation over music**: a reciter with instruments under them counts as a song and goes with the
+  music (also before 0.5). A vocals model alone would keep it, but it would keep the singing in songs too.
+- **The voice guard needs a fast computer**: MRX plus the vocals model is too slow on one thread, and on
+  a busy or slow machine the tab falls back to RNNoise. Nobody has listened yet to what the guard keeps in
+  the cartoon (5 % removed instead of 36 %).
+- **Vocals model licence**: UVR publishes its models for use with credit (see THIRD_PARTY_NOTICES) and no
+  separate weights licence; the training data is not disclosed. Fine for a free extension with credit;
+  check it before selling.
 - **When v2 hands over to live mode**: about 1–2 s after a video starts or after a seek outside what is
   separated, and after a pause until it re-locks. In the meantime, and whenever playback speed isn't 1×,
   live mode plays (with its 73 ms delay, so there's a small jump at the hand-over).
@@ -153,7 +190,7 @@ files of these clips: `<clip>-1-original.wav` and `<clip>-2-sakina-v2.wav`.
 ## Tests
 
 ```bash
-npm test     # unit tests: DSP, WebM demuxer, timeline, alignment, player, MRX + RNNoise job (~15 s)
+npm test     # unit tests: DSP, WebM demuxer, timeline, alignment, player, port codec, MRX + RNNoise and voice-guard jobs (~40 s)
 npm run e2e  # real Chrome + real YouTube, muted and off-screen (~8 min, ads included)
 ```
 
@@ -173,12 +210,13 @@ local capture of real YouTube bytes.
 
 ```
 src/capture/   main-world.js (copies YouTube's audio bytes, page world)
-src/engine/    frame.js (hidden iframe), worker.js (decode, separate, align)
-src/sep/       webm.js, timeline.js, mrx.js, fuse.js, resample.js, align.js, job.js
+src/engine/    offscreen.js (one worker per tab), worker.js (decode, separate, align), frame.js (iframe fallback)
+src/background/ sw.js (opens the offscreen document)     src/shared/  settings.js, wire.js (port codec)
+src/sep/       webm.js, timeline.js, mrx.js, mdx.js (voice guard), fuse.js, resample.js, align.js, job.js
 src/dsp/       suppressor.js (v1), fft.js, rnnoise-voice.js
 src/audio/     engine.js (Web Audio routing), processor.js (AudioWorklet), player.js (v2 chunk player)
 src/content/   main.js, v2.js     src/popup/  popup.js
-static/        manifest, popup, engine.html, icons
+static/        manifest, popup, offscreen.html, engine.html (fallback), icons
 scripts/       build.mjs, fetch-model.mjs, chrome.mjs (launcher), publish-store.mjs, make-icons.mjs
 store/         Chrome Web Store kit: listing text, privacy policy, images
 test/          unit tests, e2e.mjs, fixtures/ (synthesised voice, WebM made with ffmpeg)

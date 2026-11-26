@@ -1,8 +1,14 @@
 // Content-script side of v2 (AI separation ahead of playback).
 //
-//  main world capture ──bytes──▶ this controller ──port──▶ engine worker (in a hidden extension iframe)
+//  main world capture ──bytes──▶ this controller ──port──▶ engine worker
 //  engine worker ──separated chunks──▶ this controller ──▶ AudioWorklet player
 //  AudioWorklet live snippet ──▶ engine "align" ──▶ worklet map (audio frame ↔ media time)
+//
+// The engine worker normally lives in the extension's offscreen document (multithreaded; reached over a
+// chrome.runtime port, JSON with base64 for binary data). If that fails it lives in a hidden extension
+// iframe on the page (one thread; a MessagePort with zero-copy transfers), as before 0.5.
+import { pack, unpack } from '../shared/wire.js';
+
 const TAG = '__sakina_mse__';
 const SNIPPET = 16384;
 const READY_TIMEOUT = 90000;
@@ -40,7 +46,8 @@ export class V2Controller {
       state: this.state, error: this.error, locked: this.locked, score: this.score,
       speed: this.worker.speed || 0, decodedTo: this.worker.decodedTo || 0, share: this.worker.share || null,
       chunkRemoved: this.worker.chunkRemoved ?? null, protect: this.worker.protect ?? null,
-      sfx: this.worker.sfx ?? null,
+      sfx: this.worker.sfx ?? null, transport: this.transport || null, threads: this.worker.threads ?? this.threads ?? null,
+      guard: this.worker.guard ?? this.guard ?? null, guardNote: this.worker.guardNote || '', guardSpeed: this.worker.guardSpeed ?? null,
     };
   }
 
@@ -93,6 +100,64 @@ export class V2Controller {
   _start() {
     if (this.state !== 'off') return;
     this.state = 'loading';
+    setTimeout(() => {
+      if (this.state === 'loading') { this.state = 'error'; this.error = 'the AI model did not load in time; using live mode'; }
+    }, READY_TIMEOUT);
+    this._connectOffscreen().catch((err) => {
+      console.warn('[Sakina v2] offscreen engine unavailable, using the in-page engine:', err?.message || err);
+      this._injectFrame();
+    });
+  }
+
+  // The engine has the port: hand it what was captured while it was starting, then the settings.
+  _connected(port, transport) {
+    this.port = port;
+    this.transport = transport;
+    const q = this.queue; this.queue = [];
+    for (const msg of q) this._send(msg, msg.bytes ? [msg.bytes.buffer] : []);
+    this._send(this._settingsMsg());
+  }
+
+  async _connectOffscreen() {
+    const r = await chrome.runtime.sendMessage({ type: 'sakina:engine' });
+    if (!r?.ok) throw new Error(r?.error || 'no answer from the background worker');
+    // The document may still be starting: a port that closes before "hello" is retried.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const ok = await new Promise((resolve) => {
+        const port = chrome.runtime.connect({ name: 'sakina-engine' });
+        let hello = false;
+        port.onMessage.addListener((raw) => {
+          if (!hello) {
+            if (raw?.type !== 'hello') return;
+            hello = true;
+            this.isolated = raw.isolated;
+            this._connected({ postMessage: (msg) => port.postMessage(pack(msg)) }, 'offscreen');
+            resolve(true);
+            return;
+          }
+          this._onEngine(unpack(raw).msg || {});
+        });
+        port.onDisconnect.addListener(() => {
+          void chrome.runtime.lastError;
+          if (!hello) { resolve(false); return; }
+          this._lost();
+        });
+      });
+      if (ok) return;
+      await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    }
+    throw new Error('the offscreen engine did not answer');
+  }
+
+  // The engine went away after it was running (extension reloaded or updated, or a crash).
+  _lost() {
+    this.port = null;
+    this._unlock();
+    this.state = 'error';
+    this.error = 'the AI engine stopped; using live mode';
+  }
+
+  _injectFrame() {
     const inject = () => {
       const f = document.createElement('iframe');
       f.src = chrome.runtime.getURL('engine.html');
@@ -101,17 +166,11 @@ export class V2Controller {
       f.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none;';
       f.addEventListener('load', () => {
         const ch = new MessageChannel();
-        this.port = ch.port1;
-        this.port.onmessage = (m) => this._onEngine(m.data || {});
+        ch.port1.onmessage = (m) => this._onEngine(m.data || {});
         f.contentWindow.postMessage({ type: 'sakina-connect' }, new URL(chrome.runtime.getURL('')).origin, [ch.port2]);
-        const q = this.queue; this.queue = [];
-        for (const msg of q) this._send(msg, msg.bytes ? [msg.bytes.buffer] : []);
-        this._send(this._settingsMsg());
+        this._connected(ch.port1, 'iframe');
       }, { once: true });
       (document.body || document.documentElement).appendChild(f);
-      setTimeout(() => {
-        if (this.state === 'loading') { this.state = 'error'; this.error = 'the AI model did not load in time; using live mode'; }
-      }, READY_TIMEOUT);
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });
     else inject();
@@ -121,7 +180,7 @@ export class V2Controller {
 
   _onEngine(d) {
     switch (d.type) {
-      case 'ready': this.state = 'ready'; this.error = ''; this.lastAlign = 0; break;
+      case 'ready': this.state = 'ready'; this.error = ''; this.lastAlign = 0; this.threads = d.threads; this.guard = d.guard; break;
       case 'error': if (this.state !== 'ready') this.state = 'error'; this.error = d.error; console.warn('[Sakina v2]', d.error); break;
       case 'unsupported': this.error = d.reason; break;
       case 'status': this.worker = d; break;

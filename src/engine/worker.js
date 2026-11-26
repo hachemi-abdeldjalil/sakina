@@ -1,4 +1,6 @@
-// Sakina v2 separation worker (module worker, extension origin, inside a hidden iframe on YouTube).
+// Sakina v2 separation worker (module worker, extension origin). It normally runs in the offscreen
+// document, which is cross-origin isolated, so the model uses several threads. As a fallback it runs in
+// a hidden extension iframe on YouTube, which Chrome does not isolate: one thread there.
 //
 //   captured WebM/Opus bytes → demux → WebCodecs AudioDecoder → 48 kHz timeline
 //   → chunks of up to 10 s (+1 s context each side), the first gap after the playhead first
@@ -11,13 +13,22 @@ import { WebmOpusDemuxer } from '../sep/webm.js';
 import { PcmTimeline } from '../sep/timeline.js';
 import { alignSnippet } from '../sep/align.js';
 import { separateBlock } from '../sep/job.js';
+import { MDX_TWO_RUNS } from '../sep/mdx.js';
 import { createRnnoiseVoice } from '../dsp/rnnoise-voice.js';
 
 const SR = 48000;
-const CHUNK = 10;      // seconds of output per job
-const SHORT = 5;       // seconds per job while the AI track is catching up with the playhead
 const MIN_JOB = 1.5;   // shortest job worth running (except right before the end or the next chunk)
 const CTX = 1;         // seconds of context on each side (the model looks both ways)
+// Seconds of output per job, and per job while the AI track is catching up with the playhead. With the
+// voice guard, a job (plus its context) is sized to fill two or one runs of the vocals model.
+const chunkLen = () => (guardOn ? MDX_TWO_RUNS - 2 * CTX - 0.1 : 10);
+const shortLen = () => (guardOn ? MDX_TWO_RUNS / 2 - 2 * CTX - 0.1 : 5);
+// The voice guard (vocals model, see sep/mdx.js) needs threads; with fewer it would not keep up.
+const GUARD_MIN_THREADS = 3;
+// The guard is dropped for the tab when a full-length job would make less than this many seconds of
+// output per second of work, on average over the guarded jobs after the first two (start-up, warm-up).
+const GUARD_MIN_SPEED = 1.15;
+const GUARD_SKIP_JOBS = 2, GUARD_JUDGE_JOBS = 3;
 const OVERLAP = 0.05;  // seconds shared with the neighbour chunk, crossfaded by the player
 const LOOKAHEAD = 75;  // seconds ahead of the playhead worth separating
 const BEHIND = 60;     // seconds behind the playhead worth keeping
@@ -25,6 +36,10 @@ const BEHIND = 60;     // seconds behind the playhead worth keeping
 let port = null;
 let ready = false;
 let session = null, rnn = null;
+let vocals = null;       // the vocals-model session (voice guard), when loaded
+let guardOn = false;
+let guardNote = '';      // why the guard is off, for diagnostics
+let guardJobs = 0, guardSpeed = 0; // guarded jobs so far; their output speed (full-job equivalent, average)
 const timeline = new PcmTimeline(SR);
 let demuxer = null, decoder = null, streamId = 0;
 let decoderChannels = 2;
@@ -36,6 +51,8 @@ let speed = 0;           // seconds of audio separated per second of work (movin
 let lastShare = null;
 let lastRemoved = null;  // energy removed from the last separated chunk (diagnostics)
 let generation = 0;      // bumped on reset/settings change, so stale jobs are discarded
+// Threads need SharedArrayBuffer, i.e. cross-origin isolation. Leave a core for YouTube's own decoding.
+const threads = self.crossOriginIsolated ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1;
 
 const send = (msg, transfer) => port && port.postMessage(msg, transfer || []);
 const fail = (where, err) => send({ type: 'error', error: `${where}: ${err?.message || err}` });
@@ -50,16 +67,25 @@ self.onmessage = (e) => {
 async function init() {
   const base = new URL('./', import.meta.url);
   ort.env.wasm.wasmPaths = new URL('ort/', base).href;
-  ort.env.wasm.numThreads = 1; // the iframe is not cross-origin isolated, so no threads
+  ort.env.wasm.numThreads = threads;
   ort.env.wasm.proxy = false;
   const t0 = performance.now();
-  session = await ort.InferenceSession.create(new URL('../models/mrx.int8.onnx', base).href, {
-    executionProviders: ['wasm'], graphOptimizationLevel: 'all',
-  });
+  const opts = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' };
+  session = await ort.InferenceSession.create(new URL('../models/mrx.int8.onnx', base).href, opts);
   const wasm = await (await fetch(new URL('rnnoise.wasm', base))).arrayBuffer();
   rnn = await createRNNWasmModule({ wasmBinary: wasm });
+  if (threads >= GUARD_MIN_THREADS) {
+    try {
+      vocals = await ort.InferenceSession.create(new URL('../models/mdx-vocals.fp16w.onnx', base).href, opts);
+      guardOn = true;
+    } catch (err) {
+      guardNote = `vocals model failed to load: ${err?.message || err}`;
+    }
+  } else {
+    guardNote = `${threads} thread(s): too few for the vocals model`;
+  }
   ready = true;
-  send({ type: 'ready', loadMs: Math.round(performance.now() - t0) });
+  send({ type: 'ready', loadMs: Math.round(performance.now() - t0), threads, guard: guardOn ? 'vocals' : 'rnnoise' });
   schedule();
 }
 
@@ -67,6 +93,11 @@ function run(feeds) {
   const f = {};
   for (const [k, v] of Object.entries(feeds)) f[k] = new ort.Tensor('float32', v.data, v.dims);
   return session.run(f);
+}
+
+async function runVocals(x) {
+  const out = await vocals.run({ [vocals.inputNames[0]]: new ort.Tensor('float32', x.data, x.dims) });
+  return out[vocals.outputNames[0]].data;
 }
 
 function onMessage(msg) {
@@ -191,6 +222,7 @@ function choose() {
   if (c0 >= horizon - 0.25) return null;
   const spd = speed || 1.8;
   const jobTime = (len) => (len + 2 * CTX) / spd + 0.7; // + time to deliver it and lock on
+  const CHUNK = chunkLen(), SHORT = shortLen();
   let len = CHUNK;
   const urgent = state.playing && c0 - P < jobTime(CHUNK);
   if (urgent) {
@@ -210,7 +242,7 @@ function choose() {
 
 async function work() {
   if (busy || !ready) return;
-  timeline.evict(state.playhead - BEHIND - CHUNK, state.playhead + LOOKAHEAD + 60);
+  timeline.evict(state.playhead - BEHIND - 10, state.playhead + LOOKAHEAD + 60);
   for (let i = spans.length - 1; i >= 0; i--) if (spans[i][1] < state.playhead - BEHIND) spans.splice(i, 1);
   const pick = state.enabled ? choose() : null;
   status();
@@ -222,9 +254,21 @@ async function work() {
   try {
     const { L, R } = timeline.read(a, b);
     const t0 = performance.now();
-    const res = await separateBlock(L, R, { run, voiceModel: () => createRnnoiseVoice(rnn) }, { protect: settings.protect, keep: { music: 0, speech: 1, sfx: settings.sfx } });
+    const deps = { run, voiceModel: () => createRnnoiseVoice(rnn), ...(guardOn ? { runVocals } : {}) };
+    const res = await separateBlock(L, R, deps, { protect: settings.protect, keep: { music: 0, speech: 1, sfx: settings.sfx } });
     const secs = (performance.now() - t0) / 1000;
     speed = speed ? 0.7 * speed + 0.3 * ((b - a) / secs) : (b - a) / secs;
+    // Can this computer keep up with the guard? Judge it on full-length jobs (a full job reads its
+    // output plus 2·CTX of context), averaged after start-up, and drop the guard for this tab if not.
+    if (res.guard === 'vocals' && ++guardJobs > GUARD_SKIP_JOBS) {
+      const full = chunkLen(), est = ((b - a) / secs) * (full / (full + 2 * CTX));
+      const n = guardJobs - GUARD_SKIP_JOBS;
+      guardSpeed = n === 1 ? est : guardSpeed + (est - guardSpeed) / Math.min(n, 4);
+      if (n >= GUARD_JUDGE_JOBS && guardSpeed < GUARD_MIN_SPEED) {
+        guardOn = false;
+        guardNote = `too slow on this computer (${guardSpeed.toFixed(2)}x real time with the vocals model)`;
+      }
+    }
     lastShare = res.share;
     if (gen === generation) {
       const s0 = Math.max(a, c0 - OVERLAP);
@@ -253,7 +297,7 @@ function status() {
   if (now - lastStatus < 500) return;
   lastStatus = now;
   send({
-    type: 'status', ready, speed, share: lastShare, chunkRemoved: lastRemoved, protect: settings.protect, sfx: settings.sfx,
+    type: 'status', ready, speed, threads, guard: guardOn ? 'vocals' : 'rnnoise', guardNote, guardSpeed, share: lastShare, chunkRemoved: lastRemoved, protect: settings.protect, sfx: settings.sfx,
     decodedTo: timeline.end(), chunks: spans.length, channels: decoderChannels,
   });
 }

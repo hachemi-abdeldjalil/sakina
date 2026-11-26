@@ -52,6 +52,7 @@ raise `version` in `static/manifest.json` for every later upload.
 - **Single purpose:** Remove the background music from YouTube videos while they play, keeping voices, Quran recitation and, if the user wants, sound effects. Everything runs on the user's device.
 - **Permission justifications:**
   - `storage`: saves the user's settings (on/off, quality, keep sound effects, strength, voice protection, centre focus).
+  - `offscreen` (since 0.5): Sakina runs its music-removal model in an offscreen document, a hidden extension page, so the model can use several processor threads and keep up with playback. The document only processes the audio of the YouTube video being watched, on the user's device; nothing is sent anywhere.
   - Host permission (content scripts on `https://www.youtube.com/*` and `https://m.youtube.com/*`): Sakina has to process the sound of the YouTube video being watched. It runs only on YouTube.
 - **Remote code:** No, I am not using remote code. All JavaScript, WebAssembly modules (ONNX Runtime, RNNoise), and the separation model are included in the package.
 - **Data usage:** tick none of the data types, and confirm the three certifications.
